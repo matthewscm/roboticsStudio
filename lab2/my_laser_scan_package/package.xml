@@ -4,7 +4,7 @@
   <name>my_laser_scan_package</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="student@todo.todo">student</maintainer>
+  <maintainer email="claire.m.matthews@student.uts.edu.au">Claire Matthews</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
