@@ -14,8 +14,10 @@ private:
     void topic_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr subscription_;
-    //rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr publisher_;
-    double target_angle_;
+    rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr publisher_;
+    double max_angle_;
+    double min_angle_;
+    size_t target_index_;
 };
 
 
