@@ -31,7 +31,7 @@ void LaserScanSubscriber::topic_callback(const sensor_msgs::msg::LaserScan::Shar
     //Copy header information from the original message
     angle_scan_msg->header = msg->header;
     
-    // Set the index
+    // Set the index filter
     int filter_number= 2; 
 
     // // Set the angle range for the filtered scan
@@ -42,6 +42,7 @@ void LaserScanSubscriber::topic_callback(const sensor_msgs::msg::LaserScan::Shar
     angle_scan_msg->angle_max = msg->angle_max;
 
     //Set the angle increment for the filtered scan
+    // Ensure that the angle increment is adjusted to account for the filter
     angle_scan_msg->angle_increment = msg->angle_increment * filter_number; 
     
     //Set ranges and insensities vectors 
@@ -81,7 +82,7 @@ void LaserScanSubscriber::topic_callback(const sensor_msgs::msg::LaserScan::Shar
     //     }
     // }
 
-    //Read scan at every 5th index
+    //Read scan at every nth index and populate the new message
     for(size_t i = 0; i < msg->ranges.size(); i += filter_number) {
         angle_scan_msg->ranges.push_back(msg->ranges[i]); 
         if(!msg->intensities.empty()) { 
@@ -99,6 +100,7 @@ void LaserScanSubscriber::topic_callback(const sensor_msgs::msg::LaserScan::Shar
     //Publish scan info 
     publisher_->publish(*angle_scan_msg);
 
+    // Send given scan index to the console
     if (target_index_ < msg->ranges.size())
     {
         double target_range = msg->ranges[target_index_];
