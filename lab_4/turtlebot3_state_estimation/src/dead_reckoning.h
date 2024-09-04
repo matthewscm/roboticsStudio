@@ -17,6 +17,7 @@ public:
     void move_robot(double linear_speed, double angular_speed);
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void timer_callback();
+    void update_odometry();
 
 private:
  // State variables
@@ -27,12 +28,14 @@ private:
     double start_y_;
     double distance_;
     bool forward_;
+    bool ending_;
+
     
 
     
     // Parameters
-    double linear_speed_;
-    double angular_speed_;
+    float linear_speed_;
+    float angular_speed_;
 
     // Gaussian noise parameters
     std::default_random_engine generator_;
