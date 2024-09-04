@@ -7,8 +7,18 @@
   <maintainer email="claire.m.matthews@student.uts.edu.au">student</maintainer>
   <license>TODO: License declaration</license>
 
+  <!-- Build tools -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- Dependencies -->
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+
+  <!-- Testing dependencies -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
@@ -16,3 +26,4 @@
     <build_type>ament_cmake</build_type>
   </export>
 </package>
+
