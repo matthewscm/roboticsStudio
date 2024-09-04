@@ -42,7 +42,7 @@ DeadReckoningNode::DeadReckoningNode() : Node("dead_reckoning") {
 void DeadReckoningNode::move_robot(double linear_speed, double angular_speed) {
     // Create a twist message
     auto twist = geometry_msgs::msg::Twist();
-    twist.linear.x = linear_speed;
+    twist.linear.x = forward_ ? linear_speed : -linear_speed;
     twist.angular.z = angular_speed;
 
     // Publish the twist message
@@ -52,7 +52,7 @@ void DeadReckoningNode::move_robot(double linear_speed, double angular_speed) {
 void DeadReckoningNode::publish_cmd_vel(double linear_speed, double angular_speed) {
     // Create a twist message
     auto twist = geometry_msgs::msg::Twist();
-    twist.linear.x = linear_speed;
+    twist.linear.x = forward_ ? linear_speed : -linear_speed;
     twist.angular.z = angular_speed;
 
     // Publish the twist message
@@ -60,46 +60,34 @@ void DeadReckoningNode::publish_cmd_vel(double linear_speed, double angular_spee
 }
 
 void DeadReckoningNode::odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    // Add Gaussian noise to the odometry readings
+    // Add Gaussian noise to odometry readings
     double noisy_x = msg->pose.pose.position.x + noise_distribution_(generator_);
     double noisy_y = msg->pose.pose.position.y + noise_distribution_(generator_);
     double noisy_theta = tf2::getYaw(msg->pose.pose.orientation) + noise_distribution_(generator_);
 
-    // Update state variables with noisy data
+    // Update the state variables with noisy data
     x_ = noisy_x;
     y_ = noisy_y;
     theta_ = noisy_theta;
-
-    // Publish noisy odometry
-    auto noisy_odom = nav_msgs::msg::Odometry();
-    noisy_odom.header.stamp = this->now();
-    noisy_odom.header.frame_id = "odom";
-    noisy_odom.pose.pose.position.x = noisy_x;
-    noisy_odom.pose.pose.position.y = noisy_y;
-    noisy_odom.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, noisy_theta));
-    odom_pub->publish(noisy_odom);
 }
 
 void DeadReckoningNode::timer_callback() {
-    // Calculate movement direction
-    double linear_speed = forward_ ? linear_speed_ : -linear_speed_;
-    
-    // Move robot based on parameters
-    move_robot(linear_speed, angular_speed_);
-    
-    // Update position using dead reckoning
-    double dt = 0.1; // Example time step
-    double delta_x = linear_speed * cos(theta_) * dt;
-    double delta_y = linear_speed * sin(theta_) * dt;
-    x_ += delta_x;
-    y_ += delta_y;
-    theta_ += angular_speed_ * dt;
+    // Move the robot
+    move_robot(linear_speed_, angular_speed_);
 
-    // Check if distance traveled is sufficient
-    double distance_traveled = std::sqrt(std::pow(x_ - start_x_, 2) + std::pow(y_ - start_y_, 2));
-    if (distance_traveled >= distance_) {
+    // Check if the robot has traveled the required distance
+    double current_distance = std::sqrt(std::pow(x_ - start_x_, 2) + std::pow(y_ - start_y_, 2));
+    if (current_distance >= distance_) {
         // Stop the robot
         move_robot(0.0, 0.0);
-        RCLCPP_INFO(this->get_logger(), "Target distance reached.");
+
+        // Stop the timer
+        timer_->cancel();
     }
+}
+
+bool DeadReckoningNode::has_reached_distance(double tolerance) {
+    // Check if the robot has traveled the desired distance
+    double current_distance = std::sqrt(std::pow(x_ - start_x_, 2) + std::pow(y_ - start_y_, 2));
+    return current_distance >= (distance_ - tolerance);
 }
