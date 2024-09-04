@@ -4,15 +4,17 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/odometry.hpp>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2/LinearMath/Quaternion.h>  
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>  
 #include <random>
 
 class DeadReckoningNode : public rclcpp::Node {
 public:
     DeadReckoningNode();
+    // Destructor
+    ~DeadReckoningNode();
     // Functions
     void move_robot(double linear_speed, double angular_speed);
-    void publish_cmd_vel(double linear_speed, double angular_speed);
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void timer_callback();
 
@@ -25,6 +27,7 @@ private:
     double start_y_;
     double distance_;
     bool forward_;
+    
 
     
     // Parameters
@@ -39,6 +42,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr estimated_odom_pub;
 
     // Timer
     rclcpp::TimerBase::SharedPtr timer_;
