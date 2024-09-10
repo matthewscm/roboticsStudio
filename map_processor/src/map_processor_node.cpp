@@ -12,7 +12,7 @@ public:
     : Node("map_processor_node")
     {
         subscription_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            "/map", 10, std::bind(&MapProcessorNode::mapCallback, this, std::placeholders::_1));
+            "map", 10, std::bind(&MapProcessorNode::mapCallback, this, std::placeholders::_1));
 
         scan_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10, std::bind(&MapProcessorNode::scanCallback, this, std::placeholders::_1));
@@ -82,9 +82,9 @@ private:
 
     std::cout << "Occupancy grid map converted to a binary image\n";
 
-    // // Display the image to verify
-    // cv::imshow("Occupancy Grid", m_MapColImage);
-    // cv::waitKey(1);
+    // Display the image to verify
+    cv::imshow("Occupancy Grid", m_MapColImage);
+    cv::waitKey(1);
 }
 
 
