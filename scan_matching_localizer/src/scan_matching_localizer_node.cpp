@@ -37,42 +37,22 @@ private:
         cv::Mat scan_image = laserScanToMat(msg);
 
         if (!image_captured_) {
-            // Capture the first image
             first_image_ = scan_image.clone();
             image_captured_ = true;
-
-            // Show the first image
             cv::imshow("Laser Scan Image", first_image_);
             cv::waitKey(1);
         } else {
-            // Capture and show the new image
             second_image_ = scan_image.clone();
             cv::imshow("Laser Scan Image", second_image_);
             cv::waitKey(1);
-
+            
             calculateYawChange();
-
             if (std::abs(angle_difference_) < 1.0) {  // Assuming 1 degree tolerance
                 RCLCPP_INFO(this->get_logger(), "Localization successful. Angle is close to 0.");
                 return;  // End the localization process
             }
-
-            bool left_rotation = false;
-            if (angle_difference_ > 0.5) {
-                RCLCPP_INFO(this->get_logger(), "Rotating robot to the right.");
-                left_rotation = false;
-            } else if (angle_difference_ < -0.5) {
-                RCLCPP_INFO(this->get_logger(), "Rotating robot to the left.");
-                left_rotation = true;
-            } else {
-                return;  // No significant angle change
-            }
-
-            rotateRobot(left_rotation);
-            rclcpp::sleep_for(std::chrono::seconds(2));
-
-            // Update the first image for the next comparison
-            first_image_ = second_image_.clone();
+            
+            rotateRobot();
         }
     }
 
@@ -123,28 +103,18 @@ private:
         cv::cvtColor(m_MapBinImage, m_MapColImage, cv::COLOR_GRAY2BGR);
     }
 
-void rotateRobot(bool left_rotation) {
-    auto twist_msg = geometry_msgs::msg::Twist();
-
-    if (left_rotation) {
-        twist_msg.angular.z = 0.5;  // Rotate left at 0.5 radians per second
-    } else {
-        twist_msg.angular.z = -0.5; // Rotate right at 0.5 radians per second
+    void rotateRobot() {
+        auto twist_msg = geometry_msgs::msg::Twist();
+        twist_msg.angular.z = 0.5;  // Rotate at 0.5 radians per second
+        cmd_publisher_->publish(twist_msg);
+        rclcpp::sleep_for(std::chrono::seconds(2));
+        twist_msg.angular.z = 0.0;
+        cmd_publisher_->publish(twist_msg);
     }
-
-    cmd_publisher_->publish(twist_msg);
-    rclcpp::sleep_for(std::chrono::milliseconds(20));  // Allow time for rotation
-
-    // Stop the robot after rotating
-    twist_msg.angular.z = 0.0;
-    cmd_publisher_->publish(twist_msg);
-    rclcpp::sleep_for(std::chrono::milliseconds(20));  // Allow time to stop
-}
-
 
     void calculateYawChange() {
         std::vector<cv::Point2f> srcPoints, dstPoints;
-        detectAndMatchFeatures(m_MapColImage, second_image_, srcPoints, dstPoints);
+        detectAndMatchFeatures(m_MapColImage, first_image_, srcPoints, dstPoints);
 
         if (srcPoints.size() < 3 || dstPoints.size() < 3) {
             RCLCPP_WARN(this->get_logger(), "Not enough points for affine transformation. Points detected: %zu", srcPoints.size());
@@ -159,73 +129,100 @@ void rotateRobot(bool left_rotation) {
             }
 
             double angle = atan2(transform_matrix.at<double>(1, 0), transform_matrix.at<double>(0, 0));
-            angle_difference_ = angle * 180.0 / CV_PI; // Convert to degrees
+            angle_difference_ = angle * 180.0 / CV_PI;
             
-            // Normalize angle to be within -180 to 180 degrees
-            if (angle_difference_ > 180.0) {
-                angle_difference_ -= 360.0;
-            } else if (angle_difference_ < -180.0) {
-                angle_difference_ += 360.0;
-            }
-
             RCLCPP_INFO(this->get_logger(), "Estimated yaw angle change: %f degrees", angle_difference_);
         } catch (const cv::Exception& e) {
             RCLCPP_ERROR(this->get_logger(), "Error in estimateAffinePartial2D: %s", e.what());
         }
     }
 
-    void detectAndMatchFeatures(const cv::Mat& img1, const cv::Mat& img2,
-                                std::vector<cv::Point2f>& srcPoints, std::vector<cv::Point2f>& dstPoints) {
-        if (img1.empty() || img2.empty()) {
-            RCLCPP_ERROR(this->get_logger(), "One or both images are empty.");
-            return;
-        }
+void detectAndMatchFeatures(const cv::Mat& img1, const cv::Mat& img2,
+                            std::vector<cv::Point2f>& srcPoints, std::vector<cv::Point2f>& dstPoints) {
+    if (img1.empty() || img2.empty()) {
+        RCLCPP_ERROR(this->get_logger(), "One or both images are empty.");
+        return;
+    }
 
-        cv::Mat resized_img2;
-        cv::resize(img2, resized_img2, img1.size()); // Resize img2 to match img1 size
+    cv::Mat resized_img2;
+    cv::resize(img2, resized_img2, img1.size()); // Resize img2 to match img1 size
 
-        cv::Ptr<cv::ORB> orb = cv::ORB::create();
-        std::vector<cv::KeyPoint> keypoints1, keypoints2;
-        cv::Mat descriptors1, descriptors2;
+    cv::Ptr<cv::ORB> orb = cv::ORB::create();
+    std::vector<cv::KeyPoint> keypoints1, keypoints2;
+    cv::Mat descriptors1, descriptors2;
 
+    try {
         orb->detectAndCompute(img1, cv::noArray(), keypoints1, descriptors1);
         orb->detectAndCompute(resized_img2, cv::noArray(), keypoints2, descriptors2);
+    } catch (const cv::Exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "OpenCV error: %s", e.what());
+        return;
+    }
 
-        std::vector<cv::DMatch> matches;
-        cv::BFMatcher matcher(cv::NORM_HAMMING);
-        matcher.match(descriptors1, descriptors2, matches);
+    RCLCPP_INFO(this->get_logger(), "Image 1 size: %d x %d", img1.cols, img1.rows);
+    RCLCPP_INFO(this->get_logger(), "Resized Image 2 size: %d x %d", resized_img2.cols, resized_img2.rows);
+    RCLCPP_INFO(this->get_logger(), "Number of keypoints in image 1: %zu", keypoints1.size());
+    RCLCPP_INFO(this->get_logger(), "Number of keypoints in resized image 2: %zu", keypoints2.size());
 
-        double min_dist = std::numeric_limits<double>::max();
-        for (const auto& match : matches) {
-            if (match.distance < min_dist) {
-                min_dist = match.distance;
-            }
-        }
+    if (keypoints2.empty()) {
+        RCLCPP_WARN(this->get_logger(), "No keypoints found in resized image 2.");
+        return;
+    }
 
-        srcPoints.clear();
-        dstPoints.clear();
-        for (const auto& match : matches) {
-            if (match.distance <= std::max(2 * min_dist, 30.0)) {
-                srcPoints.push_back(keypoints1[match.queryIdx].pt);
-                dstPoints.push_back(keypoints2[match.trainIdx].pt);
-            }
+    cv::BFMatcher matcher(cv::NORM_HAMMING);
+    std::vector<cv::DMatch> matches;
+    matcher.match(descriptors1, descriptors2, matches);
+
+    std::sort(matches.begin(), matches.end(), [](const cv::DMatch& a, const cv::DMatch& b) {
+        return a.distance < b.distance;
+    });
+
+    std::vector<cv::DMatch> goodMatches;
+    double min_dist = matches.front().distance;
+    for (const auto& match : matches) {
+        if (match.distance <= std::max(2 * min_dist, 30.0)) {
+            goodMatches.push_back(match);
         }
     }
+
+    srcPoints.clear();
+    dstPoints.clear();
+    for (const auto& match : goodMatches) {
+        srcPoints.push_back(keypoints1[match.queryIdx].pt);
+        dstPoints.push_back(keypoints2[match.trainIdx].pt);
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Number of good matches: %zu", goodMatches.size());
+
+    if (srcPoints.empty()) {
+        RCLCPP_WARN(this->get_logger(), "No good matches found.");
+    }
+
+    cv::Mat img_matches;
+    cv::drawMatches(img1, keypoints1, resized_img2, keypoints2, goodMatches, img_matches);
+    cv::imshow("Matches", img_matches);
+    cv::waitKey(1);
+}
+
+
 
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscriber_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_publisher_;
 
-    cv::Mat m_MapColImage, m_temp_img, m_MapBinImage;
+    cv::Mat m_temp_img;
+    cv::Mat m_MapBinImage;
+    cv::Mat m_MapColImage;
     cv::Mat first_image_, second_image_;
     bool image_captured_;
     bool map_received_;
     double angle_difference_;
 };
 
-int main(int argc, char * argv[]) {
+int main(int argc, char *argv[]) {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<ScanMatchingLocalizer>());
     rclcpp::shutdown();
     return 0;
 }
+
