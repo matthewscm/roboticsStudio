@@ -63,7 +63,7 @@ private:
 
         // Proceed to calculate the yaw change and check the difference
         calculateYawChange();
-        if (std::abs(angle_difference_) < 1.0) {  // Assuming 1 degree tolerance
+        if (std::abs(angle_difference_) < 1.0) {  // 1 degree tolerance
             RCLCPP_INFO(this->get_logger(), "Localization successful. Angle is close to 0.");
             return;  // End the localization process
         }
@@ -94,40 +94,46 @@ private:
 
     void occupancyGridToImage(const nav_msgs::msg::OccupancyGrid::SharedPtr grid)
         {
-            int grid_data;
+            int grid_data; //Store grid cell data
             unsigned int row, col, val;
 
+            // Create a temporary image to store the occupancy grid data
             m_temp_img = cv::Mat::zeros(grid->info.height, grid->info.width, CV_8UC1);
-
+            // Create a binary image to store the binary version of the occupancy grid
             std::cout << "DataParse started for map: " << grid->header.stamp.sec << " Dim: " << grid->info.height << "x" << grid->info.width << std::endl;
-
+            // Parse the occupancy grid data and store it in the temporary image
             for (row = 0; row < grid->info.height; row++) {
                 for (col = 0; col < grid->info.width; col++) {
+                    // Get the grid data
                     grid_data = grid->data[row * grid->info.width + col];
+                    // Convert the grid data to a grayscale value
                     if (grid_data != -1) {
+                        // Invert the grayscale value
                         val = 255 - (255 * grid_data) / 100;
+                        // Convert the grayscale value to a binary value
                         val = (val == 0) ? 255 : 0;
+                        // Store the binary value in the temporary image
                         m_temp_img.at<uchar>(grid->info.height - row - 1, col) = val;
                     } else {
+                        // Store the unknown value in the temporary image
                         m_temp_img.at<uchar>(grid->info.height - row - 1, col) = 0;
                     }
                 }
             }
-
+            // Store the map scale, origin, and size
             map_scale_ = grid->info.resolution;
             origin_x = grid->info.origin.position.x;
             origin_y = grid->info.origin.position.y;
             size_x = grid->info.width;
             size_y = grid->info.height;
-
+            // Convert the temporary image to a binary image
             cv::Mat kernel = (cv::Mat_<uchar>(3, 3) << 0, 0, 0,
                                         0, 1, 0,
                                         0, 0, 0);
             cv::erode(m_temp_img, m_MapBinImage, kernel);
-
+            // Convert the binary image to a color image
             m_MapColImage.create(m_MapBinImage.size(), CV_8UC3);
             cv::cvtColor(m_MapBinImage, m_MapColImage, cv::COLOR_GRAY2BGR);
-
             std::cout << "Occupancy grid map converted to a binary image\n";
 
             // Display the image to verify
@@ -195,86 +201,6 @@ private:
         }
     }
 
-// void detectAndMatchFeatures(const cv::Mat& img1, const cv::Mat& img2,
-//                             std::vector<cv::Point2f>& srcPoints, std::vector<cv::Point2f>& dstPoints) {
-//     if (img1.empty() || img2.empty()) {
-//         RCLCPP_ERROR(this->get_logger(), "One or both images are empty.");
-//         return;
-//     }
-
-//     cv::Ptr<cv::ORB> orb = cv::ORB::create();
-//     std::vector<cv::KeyPoint> keypoints1, keypoints2;
-//     cv::Mat descriptors1, descriptors2;
-
-//     try {
-//         orb->detectAndCompute(img1, cv::noArray(), keypoints1, descriptors1);
-//         orb->detectAndCompute(img2, cv::noArray(), keypoints2, descriptors2);
-//     } catch (const cv::Exception& e) {
-//         RCLCPP_ERROR(this->get_logger(), "OpenCV error: %s", e.what());
-//         return;
-//     }
-
-//     RCLCPP_INFO(this->get_logger(), "Image 1 size: %d x %d", img1.cols, img1.rows);
-//     RCLCPP_INFO(this->get_logger(), "Image 2 size: %d x %d", img2.cols, img2.rows);
-//     RCLCPP_INFO(this->get_logger(), "Number of keypoints in image 1: %zu", keypoints1.size());
-//     RCLCPP_INFO(this->get_logger(), "Number of keypoints in image 2: %zu", keypoints2.size());
-
-//     if (keypoints1.empty() || keypoints2.empty()) {
-//         RCLCPP_WARN(this->get_logger(), "No keypoints found in one or both images.");
-//         return;
-//     }
-
-//     cv::BFMatcher matcher(cv::NORM_HAMMING);
-//     std::vector<cv::DMatch> matches;
-//     matcher.match(descriptors1, descriptors2, matches);
-
-//     // Sort matches by distance
-//     std::sort(matches.begin(), matches.end(), [](const cv::DMatch& a, const cv::DMatch& b) {
-//         return a.distance < b.distance;
-//     });
-
-//     // Filter good matches based on distance
-//     std::vector<cv::DMatch> goodMatches;
-//     double min_dist = matches.front().distance;
-//     for (const auto& match : matches) {
-//         if (match.distance <= std::max(2 * min_dist, 30.0)) {
-//             goodMatches.push_back(match);
-//         }
-//     }
-
-//     srcPoints.clear();
-//     dstPoints.clear();
-//     for (const auto& match : goodMatches) {
-//         srcPoints.push_back(keypoints1[match.queryIdx].pt);
-//         dstPoints.push_back(keypoints2[match.trainIdx].pt);
-//     }
-
-//     RCLCPP_INFO(this->get_logger(), "Number of good matches: %zu", goodMatches.size());
-
-//     if (srcPoints.empty()) {
-//         RCLCPP_WARN(this->get_logger(), "No good matches found.");
-//         return;
-//     }
-
-//     // Use RANSAC to filter outliers
-//     cv::Mat mask;
-//     cv::Mat homography = cv::findHomography(srcPoints, dstPoints, cv::RANSAC, 3, mask);
-
-//     std::vector<cv::DMatch> ransacMatches;
-//     for (int i = 0; i < mask.rows; i++) {
-//         if (mask.at<uchar>(i)) {
-//             ransacMatches.push_back(goodMatches[i]);
-//         }
-//     }
-
-//     RCLCPP_INFO(this->get_logger(), "Number of matches after RANSAC: %zu", ransacMatches.size());
-
-//     // Visualize the matches
-//     cv::Mat img_matches;
-//     cv::drawMatches(img1, keypoints1, img2, keypoints2, ransacMatches, img_matches);
-//     cv::imshow("Matches", img_matches);
-//     cv::waitKey(1);
-// }
 
     void detectAndMatchFeatures(const cv::Mat& img1, const cv::Mat& img2,
                                 std::vector<cv::Point2f>& srcPoints, std::vector<cv::Point2f>& dstPoints) {
@@ -305,9 +231,6 @@ private:
             dstPoints.push_back(keypoints2[match.trainIdx].pt);
         }
      }
-
-
-
 
 
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_subscriber_;
