@@ -6,14 +6,14 @@
 #include <opencv2/imgcodecs.hpp>
 #include <vector>
 
-class ScanMatchingLocalizer : public rclcpp::Node {
+class SLAM: public rclcpp::Node {
 public:
-    ScanMatchingLocalizer()
-        : Node("scan_matching_localizer"), image_captured_(false), map_received_(false), angle_difference_(0.0) {
+    SLAM()
+        : Node("slam_node"), image_captured_(false), map_received_(false), angle_difference_(0.0) {
         map_subscriber_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            "map", 10, std::bind(&ScanMatchingLocalizer::mapCallback, this, std::placeholders::_1));
+            "map", 10, std::bind(&SLAM::mapCallback, this, std::placeholders::_1));
         scan_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-            "/scan", 10, std::bind(&ScanMatchingLocalizer::scanCallback, this, std::placeholders::_1));
+            "/scan", 10, std::bind(&SLAM::scanCallback, this, std::placeholders::_1));
         cmd_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
 
         cv::namedWindow("Map Image", cv::WINDOW_AUTOSIZE);
@@ -149,7 +149,7 @@ private:
         // Check if the angle difference is below the threshold
         if (std::abs(angle_difference_) < threshold) {
             RCLCPP_INFO(this->get_logger(), "Angle difference is too small to rotate. No movement.");
-            return;
+            //return;
         }
 
         double duration_seconds = std::abs(angle_difference_radians) / rotation_speed;
@@ -260,7 +260,7 @@ private:
 
 int main(int argc, char *argv[]) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ScanMatchingLocalizer>());
+    rclcpp::spin(std::make_shared<SLAM>());
     rclcpp::shutdown();
     return 0;
 }
