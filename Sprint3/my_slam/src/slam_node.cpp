@@ -37,6 +37,7 @@ private:
         cv::imshow("Map Image", tmp_col_img);
         cv::waitKey(1);
         map_received_ = true;
+        rclcpp::sleep_for(std::chrono::seconds(15)); 
     }
 
 
@@ -45,7 +46,7 @@ private:
             RCLCPP_WARN(this->get_logger(), "Map not received yet. Scan matching will not proceed.");
             return;  // Exit if the map has not been received
         }
-        rclcpp::sleep_for(std::chrono::milliseconds(500));  // Sleep for 200 milliseconds
+        rclcpp::sleep_for(std::chrono::seconds(2));  // Sleep for 200 milliseconds
         // Check if the robot has rotated before saving the scan image
         if (robot_rotated_) {
             cv::Mat scan_image = laserScanToMat(msg);
