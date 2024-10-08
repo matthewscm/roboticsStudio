@@ -41,13 +41,13 @@ private:
     // Overlay two images
     void overlayImages() {
         // Resize the images to the same size if necessary
-        cv::Size new_size(img1_.cols * 0.5, img1_.rows * 0.5);
+        cv::Size new_size(800, 800);
         cv::resize(img1_, img1_, new_size);
         cv::resize(img2_, img2_, new_size);
 
         // Simple overlay: blending the two images
         cv::Mat overlay;
-        double alpha = 0.6;  // Weight for the first image
+        double alpha = 0.8;  // Weight for the first image
         double beta = 1.0 - alpha;  // Weight for the second image
         cv::addWeighted(img1_, alpha, img2_, beta, 0.0, overlay);
 

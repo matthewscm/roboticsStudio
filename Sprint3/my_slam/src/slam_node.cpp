@@ -64,7 +64,7 @@ private:
         calculateYawChange();
         if (std::abs(angle_difference_) < 1.0) {  // 1 degree tolerance
             RCLCPP_INFO(this->get_logger(), "Localization successful. Angle is close to 0.");
-            return;  // End the localization process
+            //return;  // End the localization process
         }
 
         rotateRobot();  // Rotate the robot based on the yaw calculation

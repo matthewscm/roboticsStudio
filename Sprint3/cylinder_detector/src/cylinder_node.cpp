@@ -1,192 +1,171 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <vector>
 #include <cmath>
+#include <nav_msgs/msg/odometry.hpp>
 
-class CylinderDetector : public rclcpp::Node {
+class CylinderNode : public rclcpp::Node {
 public:
-    CylinderDetector() : Node("cylinder_node") {
-        // Create a subscriber to the LaserScan topic
-        laser_scan_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-            "scan", 10, std::bind(&CylinderDetector::laserScanCallback, this, std::placeholders::_1));
+    CylinderNode() : Node("cylinder_node") {
+        // Create a subscriber to the Laser scan topic
+        lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
+            "/scan", 10, std::bind(&CylinderNode::laser_callback, this, std::placeholders::_1));
 
-        // Create a subscriber to the robot's pose
-        pose_subscriber_ = this->create_subscription<geometry_msgs::msg::Pose>(
-            "robot_pose", 10, std::bind(&CylinderDetector::poseCallback, this, std::placeholders::_1));
+        pose_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            "/odom", 10, std::bind(&CylinderNode::odom_callback, this, std::placeholders::_1));
+
+        
+        // Create a publisher for markers
+        marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("cylinder_marker", 10);
     }
 
 private:
-    geometry_msgs::msg::Pose current_pose_;
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr pose_subscriber_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
+    
+    nav_msgs::msg::Odometry robot_pose_; // To store the robot's pose
+    std::vector<geometry_msgs::msg::Point> points_in_segment;
 
-    void poseCallback(const geometry_msgs::msg::Pose::SharedPtr msg) {
-        // Update the current pose of the robot
-        current_pose_ = *msg;
+    void odom_callback(const std::shared_ptr<nav_msgs::msg::Odometry> msg) {
+        robot_pose_ = *msg; // Update the robot's pose
     }
 
-    void laserScanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-        // Log that the detector is looking for a cylinder
-        RCLCPP_INFO(this->get_logger(), "Looking for cylinder...");
+    void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+        const float diameter = 0.30;  // Cylinder diameter in meters
+        const float radius = diameter / 2.0; // Half diameter
+        const float threshold = 0.05; // Tolerance for detection (5 cm)
 
-        const double object_diameter = 0.30; // Diameter of the cylinder in meters
-        const double tolerance = 0.05; // Tolerance for detection
-        const double LENGTH_THRESHOLD = 0.3; // Minimum length to consider for a cylinder segment
+        std::vector<geometry_msgs::msg::Point> detected_points;
 
-        bool inSegment = false;
-        double segmentLength = 0.0;
-        double segmentRange = 0.0;
-        double prevRange = 0.0; 
-        unsigned int readings = 0;
-        unsigned int indexCount = 0;
+        // Process the Lidar data to find points that could form a cylinder
+        for (size_t i = 0; i < msg->ranges.size(); ++i) {
+            // Check if the scan value is valid
+            if (msg->ranges[i] < msg->range_max && msg->ranges[i] > msg->range_min) {
+                // Convert polar coordinates to Cartesian
+                float angle = msg->angle_min + i * msg->angle_increment;
+                float x = msg->ranges[i] * std::cos(angle);
+                float y = msg->ranges[i] * std::sin(angle);
 
-        for (unsigned int i = 0; i < msg->ranges.size(); ++i) {
-            // Extract range and angle for the current scan
-            double range = msg->ranges[i];
-            double angle = msg->angle_min + i * msg->angle_increment;
-
-            // Skip invalid ranges (e.g., infinite or NaN)
-            if (std::isinf(range) || std::isnan(range)) {
-                continue;
+                // Store the detected point
+                geometry_msgs::msg::Point point;
+                point.x = x;
+                point.y = y;
+                point.z = 0.0;  // Assuming 2D plane
+// adding ocmment to test git
+                detected_points.push_back(point);
             }
-
-            // Calculate distance between the current and previous points
-            double distance = std::abs(range - prevRange);
-
-            // Check if scans are from the same "object" by evaluating the distance threshold
-            if (distance < 0.4) { // You can adjust this threshold
-                if (!inSegment) {
-                    inSegment = true;
-                    segmentLength = 0.0;
-                    segmentRange = 0.0;
-                    readings = 0;
-                    indexCount = 0; // Reset indexCount at the start of a new segment
-                }
-                // Increment segment size and other properties
-                segmentLength += distance; // Consider the direct distance, not projected
-                segmentRange += range;
-                readings++;
-                indexCount += i; // Keep track of indices for average angle calculation
-            } else {
-                // Finalize the segment once distance exceeds threshold
-                if (inSegment) {
-                    double average_range = segmentRange / readings;
-                    double cylinder_radius = object_diameter / 2;
-
-                    // Check if the segment qualifies as the cylinder based on length and range
-                    if (segmentLength < LENGTH_THRESHOLD ) {
-                        double segment_angle = msg->angle_min + (indexCount / readings) * msg->angle_increment;
-                        double x_local = average_range * std::cos(segment_angle);
-                        double y_local = average_range * std::sin(segment_angle);
-
-                        // Transform local coordinates to global coordinates
-                        double x_global = current_pose_.position.x + x_local * std::cos(current_pose_.orientation.z) - y_local * std::sin(current_pose_.orientation.z);
-                        double y_global = current_pose_.position.y + x_local * std::sin(current_pose_.orientation.z) + y_local * std::cos(current_pose_.orientation.z);
-                        
-                        RCLCPP_INFO(this->get_logger(), "Cylinder detected at global location: (%.2f, %.2f)", x_global, y_global);
-                        return; // Exit once detected, since only one cylinder is considered
-                    }
-                    inSegment = false; // Reset for next potential segment
-                }
-            }
-            prevRange = range; // Update previous range for the next iteration
         }
+
+        // Check for cylinder-like structure in detected points
+        if (detect_cylinder(detected_points, diameter, threshold)) {
+            RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
+            publish_marker(points_in_segment);  // Publish marker at the detected points
+        } else {
+            RCLCPP_INFO(this->get_logger(), "No cylinder detected.");
+            delete_marker();  // Delete the marker
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(300));
     }
 
-    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_scan_subscriber_;
-    rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr pose_subscriber_;
+    bool detect_cylinder(const std::vector<geometry_msgs::msg::Point>& points, float diameter, float threshold) {
+        geometry_msgs::msg::Point previous_point = points[0];
+        double distance = 0;
+        for (const auto& point : points) {
+            distance = std::sqrt((point.x - previous_point.x) * (point.x - previous_point.x) + 
+                                 (point.y - previous_point.y) * (point.y - previous_point.y));
+            if (distance > 0.4) {
+                previous_point = point;
+                points_in_segment.clear();
+                distance = 0;
+                continue; // Skip to the next point
+            } 
+            if (distance < diameter + threshold && distance > diameter - threshold) {
+                    points_in_segment.push_back(point);
+                    return true;
+                }
+            else{
+                points_in_segment.clear();
+            }
+            previous_point = point;
+        }
+        return false;
+    }
+
+    void publish_marker(const std::vector<geometry_msgs::msg::Point>& points) {
+        
+        if (points.empty()) {
+            return; // No points, no marker to publish
+        }
+
+        // Calculate the centroid of the points
+        float sum_x = 0.0, sum_y = 0.0;
+        for (const auto& point : points) {
+            sum_x += point.x;
+            sum_y += point.y;
+        }
+
+        float centroid_x = sum_x / points.size();
+        float centroid_y = sum_y / points.size();
+
+        double x_position = robot_pose_.pose.pose.position.x;  // Correctly access x
+        double y_position = robot_pose_.pose.pose.position.y;  // Correctly access y
+        // Transform the centroid to the map frame
+        float map_x = centroid_x + x_position;
+        float map_y = centroid_y + y_position;
+
+        // Create a marker
+        visualization_msgs::msg::Marker marker;
+        marker.header.frame_id = "map";  // Set to the correct frame
+        marker.header.stamp = this->now();
+        marker.ns = "cylinder_detection";
+        marker.id = 1;
+        marker.type = visualization_msgs::msg::Marker::CYLINDER;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+
+        // Set the position of the marker (use the transformed position)
+        marker.pose.position.x = map_x;  
+        marker.pose.position.y = map_y;  
+        marker.pose.position.z = 0.0;  // Assume it's on the ground
+        marker.pose.orientation.x = 0.0;
+        marker.pose.orientation.y = 0.0;
+        marker.pose.orientation.z = 0.0;
+        marker.pose.orientation.w = 1.0;
+
+        marker.scale.x = 0.3;  // Diameter of the cylinder
+        marker.scale.y = 0.3;  // Diameter of the cylinder
+        marker.scale.z = 0.05;   // Height of the cylinder
+
+        marker.color.r = 1.0;  // Red color
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        marker.color.a = 1.0;        
+
+        // Publish the marker
+        marker_publisher_->publish(marker);
+    }
+
+        void delete_marker() {
+        // // Create a marker with action DELETE
+        // visualization_msgs::msg::Marker marker;
+        // marker.header.frame_id = "map";  // Set to the correct frame
+        // marker.header.stamp = this->now();
+        // marker.ns = "cylinder_detection";
+        // marker.id = 1;
+        // marker.action = visualization_msgs::msg::Marker::DELETE;  // Set action to DELETE
+
+        // // Publish the deletion marker
+        // marker_publisher_->publish(marker);
+    }
+
 };
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CylinderDetector>());
+    rclcpp::spin(std::make_shared<CylinderNode>());
     rclcpp::shutdown();
     return 0;
 }
-
-
-// #include <rclcpp/rclcpp.hpp>
-// #include <sensor_msgs/msg/laser_scan.hpp>
-// #include <cmath>
-
-// class CylinderDetector : public rclcpp::Node {
-// public:
-//     CylinderDetector() : Node("cylinder_node") {
-//         // Create a subscriber to the LaserScan topic
-//         laser_scan_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-//             "scan", 10, std::bind(&CylinderDetector::laserScanCallback, this, std::placeholders::_1));
-//     }
-
-// private:
-//     void laserScanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-//         // Log that the detector is looking for a cylinder
-//         RCLCPP_INFO(this->get_logger(), "Looking for cylinder...");
-
-//         const double object_diameter = 0.30; // Diameter of the cylinder in meters
-//         const double tolerance = 0.05; // Tolerance for detection
-//         const double LENGTH_THRESHOLD = 0.3; // Minimum length to consider for a cylinder segment
-
-//         bool inSegment = false;
-//         double segmentLength = 0.0;
-//         double segmentRange = 0.0;
-//         double prevRange = 0.0; 
-//         unsigned int readings = 0;
-//         unsigned int indexCount = 0;
-
-//         for (unsigned int i = 0; i < msg->ranges.size(); ++i) {
-//             // Extract range and angle for the current scan
-//             double range = msg->ranges[i];
-//             double angle = msg->angle_min + i * msg->angle_increment;
-
-//             // Skip invalid ranges (e.g., infinite or NaN)
-//             if (std::isinf(range) || std::isnan(range)) {
-//                 continue;
-//             }
-
-//             // Calculate distance between the current and previous points
-//             double distance = std::abs(range - prevRange);
-
-//             // Check if scans are from the same "object" by evaluating the distance threshold
-//             if (distance < 0.4) { // You can adjust this threshold
-//                 if (!inSegment) {
-//                     inSegment = true;
-//                     segmentLength = 0.0;
-//                     segmentRange = 0.0;
-//                     readings = 0;
-//                     indexCount = 0; // Reset indexCount at the start of a new segment
-//                 }
-//                 // Increment segment size and other properties
-//                 segmentLength += distance; // Consider the direct distance, not projected
-//                 segmentRange += range;
-//                 readings++;
-//                 indexCount += i; // Keep track of indices for average angle calculation
-//             } else {
-//                 // Finalize the segment once distance exceeds threshold
-//                 if (inSegment) {
-//                     double average_range = segmentRange / readings;
-//                     double cylinder_radius = object_diameter / 2;
-
-//                     // Check if the segment qualifies as the cylinder based on length and range
-//                     if (segmentLength < LENGTH_THRESHOLD ) {
-//                         double segment_angle = msg->angle_min + (indexCount / readings) * msg->angle_increment;
-//                         double x = average_range * std::cos(segment_angle);
-//                         double y = average_range * std::sin(segment_angle);
-                        
-//                         RCLCPP_INFO(this->get_logger(), "Cylinder detected at: (%.2f, %.2f)", x, y);
-//                         return; // Exit once detected, since only one cylinder is considered
-//                     }
-//                     inSegment = false; // Reset for next potential segment
-//                 }
-//             }
-//             prevRange = range; // Update previous range for the next iteration
-//         }
-//     }
-
-//     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_scan_subscriber_;
-// };
-
-// int main(int argc, char *argv[]) {
-//     rclcpp::init(argc, argv);
-//     rclcpp::spin(std::make_shared<CylinderDetector>());
-//     rclcpp::shutdown();
-//     return 0;
-// }
-
