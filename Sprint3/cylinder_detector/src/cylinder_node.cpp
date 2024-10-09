@@ -17,27 +17,24 @@ public:
     * @brief Construct a new Cylinder Node object
     */
     CylinderNode() : Node("cylinder_node") {
-        /* Subscribe to the LaserScan and Odometry topics
-        */
+        // Create a subscriber for the LaserScan message
         lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10, std::bind(&CylinderNode::laser_callback, this, std::placeholders::_1));
-
+        // Create a subscriber for the Odometry message
         pose_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
             "/estimated_odom", 10, std::bind(&CylinderNode::odom_callback, this, std::placeholders::_1));
-
-        
-        /* Create a publisher for markers*/
+        // Create a publisher for the Marker message
         marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("cylinder_marker", 10);
     }
 
 private:
+    // Create the subscribers and publishers
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr pose_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
-    
+    // Create the variables
     nav_msgs::msg::Odometry robot_pose_; // To store the robot's pose
-    std::vector<geometry_msgs::msg::Point> points_in_segment;
-
+    std::vector<geometry_msgs::msg::Point> points_in_segment; // To store the points in the segment
     int read_counter = 0;
 
     /**
@@ -53,10 +50,10 @@ private:
     * @param msg The LaserScan message
     */
     void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+        // Constants
         const float diameter = 0.30;  // Cylinder diameter in meters
         const float radius = diameter / 2.0; // Half diameter
-        const float threshold = 0.05; // Tolerance for detection (5 cm)
-
+        const float threshold = 0.5; // Tolerance for detection (5 cm)
         std::vector<geometry_msgs::msg::Point> detected_points;
 
         // Process the Lidar data to find points that could form a cylinder
@@ -67,7 +64,6 @@ private:
                 float angle = msg->angle_min + i * msg->angle_increment;
                 float x = msg->ranges[i] * std::cos(angle);
                 float y = msg->ranges[i] * std::sin(angle);
-
                 // Store the detected point
                 geometry_msgs::msg::Point point;
                 point.x = x;
@@ -76,22 +72,22 @@ private:
                 detected_points.push_back(point);
             }
         }
-
         // Check for cylinder-like structure in detected points
         if (detect_cylinder(detected_points, diameter, threshold)) {
             read_counter++;
             //RCLCPP_INFO(this->get_logger(), "Cylinder Count");
-            if (read_counter == 5){
+            // Filter out mistakes/misreads
+            if (read_counter == 8){
                 RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
                 publish_marker(points_in_segment);  // Publish marker at the detected points
+                read_counter = 0;
             }
         } else {
             RCLCPP_INFO(this->get_logger(), "No cylinder detected.");
             delete_marker();  // Delete the marker
             read_counter = 0;
         }
-        //RCLCPP_INFO(this->get_logger(), "Counter: %d", read_counter);
-        rclcpp::sleep_for(std::chrono::milliseconds(300));
+        rclcpp::sleep_for(std::chrono::milliseconds(30));
     }
 
     /**
@@ -102,67 +98,110 @@ private:
     * @return true if a cylinder is detected, false otherwise
     */
     bool detect_cylinder(const std::vector<geometry_msgs::msg::Point>& points, float diameter, float threshold) {
+        if (points.empty()) {
+            return false; // Handle empty input
+        }
+
         geometry_msgs::msg::Point previous_point = points[0];
-        double total_distance = 0;
-        double distance = 0;
-        bool inSegment = false;
-        for (const auto& point : points) {
-            distance = std::sqrt((point.x - previous_point.x) * (point.x - previous_point.x) + 
-                                 (point.y - previous_point.y) * (point.y - previous_point.y));
-            if (distance < 0.1) {
-               if (!inSegment){
-                    inSegment = true;
-                    total_distance= 0.0;
-            
+        double total_distance = 0.0;
+        bool isInSegment = false;
+
+        for (size_t i = 1; i < points.size(); ++i) {
+            const auto& point = points[i];
+            double dx = point.x - previous_point.x;
+            double dy = point.y - previous_point.y;
+            double distance_sq = dx * dx + dy * dy; // Use squared distance to avoid sqrt
+
+            // If readings are close together, assume they are from the same object
+            if (distance_sq < 0.1) { 
+                if (!isInSegment) {
+                    isInSegment = true;
+                    // Clear the points in the segment
+                    total_distance = 0.0;
                 }
-                total_distance += distance;
-            } 
-            else {
-                if (inSegment) {
-                    //RCLCPP_INFO(this->get_logger(), "Total Distance: %f", total_distance);
+                total_distance += std::sqrt(distance_sq); // Sum distance of the segment
+                points_in_segment.push_back(point); // Store the point
+            } else {
+                if (isInSegment) {
+                    // Check if the segment is a cylinder
                     if (total_distance < diameter + threshold && total_distance > diameter - threshold) {
-                            points_in_segment.push_back(point);
-                            return true;
-                        }
-                    else {
+                        points_in_segment.push_back(point);
+                        return true; // Found a cylinder
+                    } else {
+                         // Clear the points if not a cylinder
                         points_in_segment.clear();
-                        distance = 0;
-                        total_distance = 0;
-                        
+                        total_distance = 0.0;
                     }
                 }
-                inSegment = false;
-                previous_point = point;
+                // Reset the segment
+                isInSegment = false;
             }
+            previous_point = point; // Update previous_point unconditionally
         }
-        return false;
+        return false; // No cylinder detected
     }
+
 
     /**
     * @brief Publishes a marker at the centroid of the detected points
     * @param points The detected points
     */
     void publish_marker(const std::vector<geometry_msgs::msg::Point>& points) {
-        
-        if (points.empty()) {
-            return; // No points, no marker to publish
-        }
+    if (points.empty()) {
+        return; // No points, no marker to publish
+    }
 
-        // Calculate the centroid of the points
-        float sum_x = 0.0, sum_y = 0.0;
-        for (const auto& point : points) {
-            sum_x += point.x;
-            sum_y += point.y;
-        }
+    // Calculate the centroid of the points
+    float sum_x = 0.0, sum_y = 0.0;
+    for (const auto& point : points) {
+        sum_x += point.x;
+        sum_y += point.y;
+    }
 
-        float centroid_x = sum_x / points.size();
-        float centroid_y = sum_y / points.size();
+    float centroid_x = sum_x / points.size();
+    float centroid_y = sum_y / points.size();
 
-        double x_position = robot_pose_.pose.pose.position.x;  // Correctly access x
-        double y_position = robot_pose_.pose.pose.position.y;  // Correctly access y
-        // Transform the centroid to the map frame
-        float map_x = centroid_x + x_position;
-        float map_y = centroid_y + y_position;
+    // Get the robot's position
+    double x_position = robot_pose_.pose.pose.position.x;  
+    double y_position = robot_pose_.pose.pose.position.y;  
+
+    // Extract the quaternion from robot_pose_
+    double qx = robot_pose_.pose.pose.orientation.x;
+    double qy = robot_pose_.pose.pose.orientation.y;
+    double qz = robot_pose_.pose.pose.orientation.z;
+    double qw = robot_pose_.pose.pose.orientation.w;
+
+    // Calculate the yaw angle from the quaternion
+    double siny_cosp = 2.0 * (qw * qz + qx * qy);
+    double cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz);
+    double yaw = atan2(siny_cosp, cosy_cosp); // Yaw angle in radians
+
+    // Transform the centroid to the robot frame
+    // Rotation transformation
+    float map_x = x_position + (centroid_x * cos(yaw) - centroid_y * sin(yaw));
+    float map_y = y_position + (centroid_x * sin(yaw) + centroid_y * cos(yaw));
+    // void publish_marker(const std::vector<geometry_msgs::msg::Point>& points) {
+  
+    //     if (points.empty()) {
+    //         RCLCPP_INFO(this->get_logger(), "No points to publish marker");
+    //         return; // No points, no marker to publish
+    //     }
+
+    //     // Calculate the centroid of the points
+    //     float sum_x = 0.0, sum_y = 0.0;
+    //     for (const auto& point : points) {
+    //         sum_x += point.x;
+    //         sum_y += point.y;
+    //     }
+
+    //     float centroid_x = sum_x / points.size();
+    //     float centroid_y = sum_y / points.size();
+    //     // Get the robot's position
+    //     double x_position = robot_pose_.pose.pose.position.x;  
+    //     double y_position = robot_pose_.pose.pose.position.y;  
+    //     // Transform the centroid to the robotframe
+    //     float map_x = centroid_x + x_position;
+    //     float map_y = centroid_y + y_position;
 
         // Create a marker
         visualization_msgs::msg::Marker marker;
@@ -174,7 +213,7 @@ private:
         marker.action = visualization_msgs::msg::Marker::ADD;
 
         // Set the position of the marker (use the transformed position)
-        marker.pose.position.x = map_x;  
+        marker.pose.position.x = -map_x;  
         marker.pose.position.y = map_y;  
         marker.pose.position.z = 0.0;  // Assume it's on the ground
         marker.pose.orientation.x = 0.0;
@@ -192,6 +231,7 @@ private:
         marker.color.a = 1.0;        
 
         // Publish the marker
+        RCLCPP_INFO(this->get_logger(), "Publishing marker");
         marker_publisher_->publish(marker);
     }
 
