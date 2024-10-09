@@ -78,11 +78,11 @@ DeadReckoningNode::~DeadReckoningNode() {
 
 
 void DeadReckoningNode::move_robot(double linear_speed, double angular_speed) {
-    // Create a twist message
+    //Create a twist message
     
     auto twist = geometry_msgs::msg::Twist();
-    twist.linear.x = forward_ ? linear_speed : -linear_speed;
-    twist.angular.z = angular_speed;
+    twist.linear.x = 0.0;
+    twist.angular.z = 0.0;
 
     if (ending_) {
         twist.linear.x = 0.0;
@@ -151,7 +151,7 @@ void DeadReckoningNode::update_odometry() {
 
 void DeadReckoningNode::timer_callback() {
     // Move the robot
-    move_robot(linear_speed_, angular_speed_);
+    //move_robot(linear_speed_, angular_speed_);
     update_odometry();
 
     // Check if the robot has traveled the required distance

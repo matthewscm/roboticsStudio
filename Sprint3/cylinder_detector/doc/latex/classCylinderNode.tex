@@ -1,0 +1,198 @@
+\hypertarget{classCylinderNode}{}\doxysection{Cylinder\+Node Class Reference}
+\label{classCylinderNode}\index{CylinderNode@{CylinderNode}}
+
+
+A class to detect a cylinder from a set of points.  
+
+
+
+
+Inheritance diagram for Cylinder\+Node\+:\nopagebreak
+\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[width=163pt]{classCylinderNode__inherit__graph}
+\end{center}
+\end{figure}
+
+
+Collaboration diagram for Cylinder\+Node\+:\nopagebreak
+\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[width=163pt]{classCylinderNode__coll__graph}
+\end{center}
+\end{figure}
+\doxysubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{classCylinderNode_a3f61b5b6429133b5782be3e412e49c3d}{Cylinder\+Node}} ()
+\begin{DoxyCompactList}\small\item\em Construct a new Cylinder Node object. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsection*{Private Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \mbox{\hyperlink{classCylinderNode_a5ee7ed282557c659e1f7c753df48b318}{odom\+\_\+callback}} (const std\+::shared\+\_\+ptr$<$ nav\+\_\+msgs\+::msg\+::\+Odometry $>$ msg)
+\begin{DoxyCompactList}\small\item\em Callback function for the Odometry message sent by dead reckoning. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{classCylinderNode_a25d369e583c15b08136367bf840a8498}{laser\+\_\+callback}} (const sensor\+\_\+msgs\+::msg\+::\+Laser\+Scan\+::\+Shared\+Ptr msg)
+\begin{DoxyCompactList}\small\item\em Callback function for the Laser\+Scan message. \end{DoxyCompactList}\item 
+bool \mbox{\hyperlink{classCylinderNode_a25fa91f0beb347f88ecf97a166cab6af}{detect\+\_\+cylinder}} (const std\+::vector$<$ geometry\+\_\+msgs\+::msg\+::\+Point $>$ \&points, float diameter, float threshold)
+\begin{DoxyCompactList}\small\item\em Detects a cylinder from a set of points. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{classCylinderNode_abaa817295a477bf20d3ad5d8348de5f1}{publish\+\_\+marker}} (const std\+::vector$<$ geometry\+\_\+msgs\+::msg\+::\+Point $>$ \&points)
+\begin{DoxyCompactList}\small\item\em Publishes a marker at the centroid of the detected points. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{classCylinderNode_a37951ad7038eaa8959a071fcdabe8896}{delete\+\_\+marker}} ()
+\begin{DoxyCompactList}\small\item\em Deletes the marker. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsection*{Private Attributes}
+\begin{DoxyCompactItemize}
+\item 
+rclcpp\+::\+Subscription$<$ sensor\+\_\+msgs\+::msg\+::\+Laser\+Scan $>$\+::Shared\+Ptr \mbox{\hyperlink{classCylinderNode_ae94ded19243753c776f1a92323f43411}{lidar\+\_\+subscriber\+\_\+}}
+\item 
+rclcpp\+::\+Subscription$<$ nav\+\_\+msgs\+::msg\+::\+Odometry $>$\+::Shared\+Ptr \mbox{\hyperlink{classCylinderNode_acb7b15ee08d4aa07edfbecbcd7ec0660}{pose\+\_\+subscriber\+\_\+}}
+\item 
+rclcpp\+::\+Publisher$<$ visualization\+\_\+msgs\+::msg\+::\+Marker $>$\+::Shared\+Ptr \mbox{\hyperlink{classCylinderNode_a2f89ef53d21c66f07a3568581b65c7e3}{marker\+\_\+publisher\+\_\+}}
+\item 
+nav\+\_\+msgs\+::msg\+::\+Odometry \mbox{\hyperlink{classCylinderNode_a1c9a095927ad23cd5477155d9e043923}{robot\+\_\+pose\+\_\+}}
+\item 
+std\+::vector$<$ geometry\+\_\+msgs\+::msg\+::\+Point $>$ \mbox{\hyperlink{classCylinderNode_a65e58f70d8d28a33247ab6244a0527a0}{points\+\_\+in\+\_\+segment}}
+\item 
+int \mbox{\hyperlink{classCylinderNode_a0f02169d88e90449e92ec9e9f1c824ed}{read\+\_\+counter}} = 0
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+A class to detect a cylinder from a set of points. 
+
+\doxysubsection{Constructor \& Destructor Documentation}
+\mbox{\Hypertarget{classCylinderNode_a3f61b5b6429133b5782be3e412e49c3d}\label{classCylinderNode_a3f61b5b6429133b5782be3e412e49c3d}} 
+\index{CylinderNode@{CylinderNode}!CylinderNode@{CylinderNode}}
+\index{CylinderNode@{CylinderNode}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{CylinderNode()}{CylinderNode()}}
+{\footnotesize\ttfamily Cylinder\+Node\+::\+Cylinder\+Node (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}}
+
+
+
+Construct a new Cylinder Node object. 
+
+
+
+\doxysubsection{Member Function Documentation}
+\mbox{\Hypertarget{classCylinderNode_a37951ad7038eaa8959a071fcdabe8896}\label{classCylinderNode_a37951ad7038eaa8959a071fcdabe8896}} 
+\index{CylinderNode@{CylinderNode}!delete\_marker@{delete\_marker}}
+\index{delete\_marker@{delete\_marker}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{delete\_marker()}{delete\_marker()}}
+{\footnotesize\ttfamily void Cylinder\+Node\+::delete\+\_\+marker (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [private]}}
+
+
+
+Deletes the marker. 
+
+\mbox{\Hypertarget{classCylinderNode_a25fa91f0beb347f88ecf97a166cab6af}\label{classCylinderNode_a25fa91f0beb347f88ecf97a166cab6af}} 
+\index{CylinderNode@{CylinderNode}!detect\_cylinder@{detect\_cylinder}}
+\index{detect\_cylinder@{detect\_cylinder}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{detect\_cylinder()}{detect\_cylinder()}}
+{\footnotesize\ttfamily bool Cylinder\+Node\+::detect\+\_\+cylinder (\begin{DoxyParamCaption}\item[{const std\+::vector$<$ geometry\+\_\+msgs\+::msg\+::\+Point $>$ \&}]{points,  }\item[{float}]{diameter,  }\item[{float}]{threshold }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [private]}}
+
+
+
+Detects a cylinder from a set of points. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em points} & The set of points \\
+\hline
+{\em diameter} & The diameter of the cylinder \\
+\hline
+{\em threshold} & The tolerance for detection \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+true if a cylinder is detected, false otherwise 
+\end{DoxyReturn}
+\mbox{\Hypertarget{classCylinderNode_a25d369e583c15b08136367bf840a8498}\label{classCylinderNode_a25d369e583c15b08136367bf840a8498}} 
+\index{CylinderNode@{CylinderNode}!laser\_callback@{laser\_callback}}
+\index{laser\_callback@{laser\_callback}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{laser\_callback()}{laser\_callback()}}
+{\footnotesize\ttfamily void Cylinder\+Node\+::laser\+\_\+callback (\begin{DoxyParamCaption}\item[{const sensor\+\_\+msgs\+::msg\+::\+Laser\+Scan\+::\+Shared\+Ptr}]{msg }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [private]}}
+
+
+
+Callback function for the Laser\+Scan message. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em msg} & The Laser\+Scan message \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{classCylinderNode_a5ee7ed282557c659e1f7c753df48b318}\label{classCylinderNode_a5ee7ed282557c659e1f7c753df48b318}} 
+\index{CylinderNode@{CylinderNode}!odom\_callback@{odom\_callback}}
+\index{odom\_callback@{odom\_callback}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{odom\_callback()}{odom\_callback()}}
+{\footnotesize\ttfamily void Cylinder\+Node\+::odom\+\_\+callback (\begin{DoxyParamCaption}\item[{const std\+::shared\+\_\+ptr$<$ nav\+\_\+msgs\+::msg\+::\+Odometry $>$}]{msg }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [private]}}
+
+
+
+Callback function for the Odometry message sent by dead reckoning. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em msg} & The Odometry message \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{classCylinderNode_abaa817295a477bf20d3ad5d8348de5f1}\label{classCylinderNode_abaa817295a477bf20d3ad5d8348de5f1}} 
+\index{CylinderNode@{CylinderNode}!publish\_marker@{publish\_marker}}
+\index{publish\_marker@{publish\_marker}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{publish\_marker()}{publish\_marker()}}
+{\footnotesize\ttfamily void Cylinder\+Node\+::publish\+\_\+marker (\begin{DoxyParamCaption}\item[{const std\+::vector$<$ geometry\+\_\+msgs\+::msg\+::\+Point $>$ \&}]{points }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [private]}}
+
+
+
+Publishes a marker at the centroid of the detected points. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em points} & The detected points \\
+\hline
+\end{DoxyParams}
+
+
+\doxysubsection{Member Data Documentation}
+\mbox{\Hypertarget{classCylinderNode_ae94ded19243753c776f1a92323f43411}\label{classCylinderNode_ae94ded19243753c776f1a92323f43411}} 
+\index{CylinderNode@{CylinderNode}!lidar\_subscriber\_@{lidar\_subscriber\_}}
+\index{lidar\_subscriber\_@{lidar\_subscriber\_}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{lidar\_subscriber\_}{lidar\_subscriber\_}}
+{\footnotesize\ttfamily rclcpp\+::\+Subscription$<$sensor\+\_\+msgs\+::msg\+::\+Laser\+Scan$>$\+::Shared\+Ptr Cylinder\+Node\+::lidar\+\_\+subscriber\+\_\+\hspace{0.3cm}{\ttfamily [private]}}
+
+\mbox{\Hypertarget{classCylinderNode_a2f89ef53d21c66f07a3568581b65c7e3}\label{classCylinderNode_a2f89ef53d21c66f07a3568581b65c7e3}} 
+\index{CylinderNode@{CylinderNode}!marker\_publisher\_@{marker\_publisher\_}}
+\index{marker\_publisher\_@{marker\_publisher\_}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{marker\_publisher\_}{marker\_publisher\_}}
+{\footnotesize\ttfamily rclcpp\+::\+Publisher$<$visualization\+\_\+msgs\+::msg\+::\+Marker$>$\+::Shared\+Ptr Cylinder\+Node\+::marker\+\_\+publisher\+\_\+\hspace{0.3cm}{\ttfamily [private]}}
+
+\mbox{\Hypertarget{classCylinderNode_a65e58f70d8d28a33247ab6244a0527a0}\label{classCylinderNode_a65e58f70d8d28a33247ab6244a0527a0}} 
+\index{CylinderNode@{CylinderNode}!points\_in\_segment@{points\_in\_segment}}
+\index{points\_in\_segment@{points\_in\_segment}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{points\_in\_segment}{points\_in\_segment}}
+{\footnotesize\ttfamily std\+::vector$<$geometry\+\_\+msgs\+::msg\+::\+Point$>$ Cylinder\+Node\+::points\+\_\+in\+\_\+segment\hspace{0.3cm}{\ttfamily [private]}}
+
+\mbox{\Hypertarget{classCylinderNode_acb7b15ee08d4aa07edfbecbcd7ec0660}\label{classCylinderNode_acb7b15ee08d4aa07edfbecbcd7ec0660}} 
+\index{CylinderNode@{CylinderNode}!pose\_subscriber\_@{pose\_subscriber\_}}
+\index{pose\_subscriber\_@{pose\_subscriber\_}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{pose\_subscriber\_}{pose\_subscriber\_}}
+{\footnotesize\ttfamily rclcpp\+::\+Subscription$<$nav\+\_\+msgs\+::msg\+::\+Odometry$>$\+::Shared\+Ptr Cylinder\+Node\+::pose\+\_\+subscriber\+\_\+\hspace{0.3cm}{\ttfamily [private]}}
+
+\mbox{\Hypertarget{classCylinderNode_a0f02169d88e90449e92ec9e9f1c824ed}\label{classCylinderNode_a0f02169d88e90449e92ec9e9f1c824ed}} 
+\index{CylinderNode@{CylinderNode}!read\_counter@{read\_counter}}
+\index{read\_counter@{read\_counter}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{read\_counter}{read\_counter}}
+{\footnotesize\ttfamily int Cylinder\+Node\+::read\+\_\+counter = 0\hspace{0.3cm}{\ttfamily [private]}}
+
+\mbox{\Hypertarget{classCylinderNode_a1c9a095927ad23cd5477155d9e043923}\label{classCylinderNode_a1c9a095927ad23cd5477155d9e043923}} 
+\index{CylinderNode@{CylinderNode}!robot\_pose\_@{robot\_pose\_}}
+\index{robot\_pose\_@{robot\_pose\_}!CylinderNode@{CylinderNode}}
+\doxysubsubsection{\texorpdfstring{robot\_pose\_}{robot\_pose\_}}
+{\footnotesize\ttfamily nav\+\_\+msgs\+::msg\+::\+Odometry Cylinder\+Node\+::robot\+\_\+pose\+\_\+\hspace{0.3cm}{\ttfamily [private]}}
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+src/\mbox{\hyperlink{cylinder__node_8cpp}{cylinder\+\_\+node.\+cpp}}\end{DoxyCompactItemize}
