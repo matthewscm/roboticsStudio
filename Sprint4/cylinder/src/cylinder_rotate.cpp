@@ -16,7 +16,7 @@ public:
     /**
     * @brief Construct a new Cylinder Node object
     */
-    CylinderNode() : Node("cylinder_node") {
+    CylinderNode() : Node("cylinder_rotate") {
         // Create a subscriber for the LaserScan message
         lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10, std::bind(&CylinderNode::laser_callback, this, std::placeholders::_1));
@@ -36,6 +36,7 @@ private:
     nav_msgs::msg::Odometry robot_pose_; // To store the robot's pose
     std::vector<geometry_msgs::msg::Point> points_in_segment; // To store the points in the segment
     int read_counter = 0;
+    int read_counter2 = 0;
 
     /**
     * @brief Callback function for the Odometry message sent by dead reckoning
@@ -55,7 +56,7 @@ private:
         const float radius = diameter / 2.0; // Half diameter
         const float circumference = M_PI * diameter; // Circumference of the cylinder
         const float half_circumference = circumference / 2.0; // Half circumference
-        const float threshold = 0.15; // Tolerance for detection (5 cm)
+        const float threshold = 0.1; // Tolerance for detection (5 cm)
         std::vector<geometry_msgs::msg::Point> detected_points;
 
         // Process the Lidar data to find points that could form a cylinder
@@ -79,17 +80,40 @@ private:
             read_counter++;
             //RCLCPP_INFO(this->get_logger(), "Cylinder Count");
             // Filter out mistakes/misreads
-            if (read_counter == 8){
+            if (read_counter == 15){
                 RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
                 publish_marker(points_in_segment);  // Publish marker at the detected points
-                read_counter = 0;
+                rotate_robot();  // Rotate the robot
+                read_counter = 1000;
             }
         } else {
-            RCLCPP_INFO(this->get_logger(), "No cylinder detected.");
-            delete_marker();  // Delete the marker
-            read_counter = 0;
+            read_counter2++;
+            if (read_counter2 == 8){
+                RCLCPP_INFO(this->get_logger(), "No cylinder detected.");
+                delete_marker();  // Delete the marker
+                read_counter2 = 0;
+                read_counter = 0;
+            }
         }
         rclcpp::sleep_for(std::chrono::milliseconds(30));
+    }
+    // Function that rotates the robot 360 degrees when cylinder is detected
+    void rotate_robot(){
+        RCLCPP_INFO(this->get_logger(), "Rotating robot");
+        // Create a publisher for the Twist message
+        auto twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+        // Create a Twist message
+        auto twist = std::make_shared<geometry_msgs::msg::Twist>();
+        // Set the angular velocity
+        twist->angular.z = 0.5;  // 0.5 rad/s
+        // Set the linear velocity
+        twist->linear.x = 0.0;  // 0 m/s
+        // Publish the Twist message
+        twist_publisher->publish(*twist);
+        rclcpp::sleep_for(std::chrono::milliseconds(1000));
+        RCLCPP_INFO(this->get_logger(), "Stopping robot");
+        twist->angular.z = 0.0;  // Stop rotating
+        twist_publisher->publish(*twist);
     }
 
     /**
@@ -126,7 +150,7 @@ private:
             } else {
                 if (isInSegment) {
                     // Check if the segment is a cylinder
-                    if (total_distance < diameter + (threshold*0.7) && total_distance > diameter - threshold) {
+                    if (total_distance < diameter + (threshold) && total_distance > diameter - (threshold * 2) ){
                         points_in_segment.push_back(point);
                         return true; // Found a cylinder
                     } else {

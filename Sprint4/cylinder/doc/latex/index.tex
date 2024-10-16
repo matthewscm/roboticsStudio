@@ -1,0 +1,48 @@
+\hypertarget{index_intro_sec}{}\doxysection{Introduction}\label{index_intro_sec}
+This project demonstrates a ROS2 node for detecting cylinders using Laser\+Scan data. It processes the LIDAR data to find and mark cylindrical objects in a 2D plane and publishes a marker in RViz. The node subscribes to the Laser\+Scan topic and the Dead Reckoning Odometry topic to get the robot\textquotesingle{}s pose. It then processes the LIDAR data and detected cylinders then applies the transformation to the marker. The node also provides a service to delete the marker.\hypertarget{index_run_sec}{}\doxysection{Running the node}\label{index_run_sec}
+To run the node, use the following command\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{ros2 launch turtlebot3\_gazebo team\_world\_launch.launch.py}
+\DoxyCodeLine{ros2 run turtlebot3\_state\_estimation  dead\_reckoning\_node}
+\DoxyCodeLine{ros2 run scan\_matching\_localizer scan\_matching\_localizer\_node}
+\DoxyCodeLine{ros2 launch turtlebot3\_navigation2 navigation2.launch.py map:=\$HOME/ros2\_ws/src/roboticsStudio/Sprint3/map3.yaml}
+\DoxyCodeLine{ros2 run cylinder\_detector cylinder\_node}
+
+\end{DoxyCode}
+\hypertarget{index_functions_sec}{}\doxysection{Functions}\label{index_functions_sec}
+The node has the following functions\+:
+\begin{DoxyItemize}
+\item odom\+\_\+callback\+: Callback function for the Odometry message sent by dead reckoning
+\item laser\+\_\+callback\+: Callback function for the Laser\+Scan message
+\item detect\+\_\+cylinder\+: Detects a cylinder-\/like structure in the detected points
+\item publish\+\_\+marker\+: Publishes a marker at the centroid of the detected points
+\item delete\+\_\+marker\+: Deletes the marker
+\item main\+: Main function to run the node 
+\end{DoxyItemize}\hypertarget{index_subscribe_sec}{}\doxysubsection{Subscribed Topics}\label{index_subscribe_sec}
+
+\begin{DoxyItemize}
+\item /scan (sensor\+\_\+msgs\+::msg\+::\+Laser\+Scan)\+: The Laser\+Scan data
+\item /estimated\+\_\+odom (nav\+\_\+msgs\+::msg\+::\+Odometry)\+: The Dead Reckoning Odometry data 
+\end{DoxyItemize}\hypertarget{index_publish_sec}{}\doxysubsection{Published Topics}\label{index_publish_sec}
+
+\begin{DoxyItemize}
+\item /visualization\+\_\+marker (visualization\+\_\+msgs\+::msg\+::\+Marker)\+: The marker for the detected cylinder 
+\end{DoxyItemize}\hypertarget{index_param_sec}{}\doxysubsection{Parameters}\label{index_param_sec}
+
+\begin{DoxyItemize}
+\item diameter\+: The diameter of the cylinder
+\item radius\+: The radius of the cylinder
+\item threshold\+: The tolerance for detection
+\item detected\+\_\+points\+: The detected points
+\item read\+\_\+counter\+: The counter for the number of reads
+\item robot\+\_\+pose\+\_\+\+: The robot\textquotesingle{}s pose
+\item points\+\_\+in\+\_\+segment\+: The points in the segment 
+\end{DoxyItemize}\hypertarget{index_output_sec}{}\doxysection{Output}\label{index_output_sec}
+\hypertarget{index_terminal_sec}{}\doxysubsection{Terminal Output}\label{index_terminal_sec}
+The node outputs the following messages to the terminal\+:
+\begin{DoxyItemize}
+\item Cylinder detected! when a cylinder is detected
+\item No cylinder detected. when no cylinder is detected 
+\end{DoxyItemize}\hypertarget{index_rviz_sec}{}\doxysubsection{RViz Output}\label{index_rviz_sec}
+The node publishes a marker in RViz when a cylinder is detected.  \hypertarget{index_author_sec}{}\doxysection{Author}\label{index_author_sec}
+Claire Matthews 

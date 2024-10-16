@@ -53,6 +53,8 @@ private:
 
         // Display the overlayed image in a window
         cv::imshow("Map Overlay", overlay);
+        cv::imshow("Image 1", img1_);
+        cv::imshow("Image 2", img2_);
         cv::waitKey(1);  // This will keep the OpenCV window updating
     }
 
