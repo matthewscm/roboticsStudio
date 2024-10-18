@@ -6,17 +6,21 @@
 #include <vector>
 #include <cmath>
 #include <nav_msgs/msg/odometry.hpp>
+#include <std_srvs/srv/empty.hpp>
+#include <nav2_msgs/srv/manage_lifecycle_nodes.hpp>
+#include "nav2_msgs/action/navigate_to_pose.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+
 
 /**
-    * @brief A class to detect a cylinder from a set of points
+ * @brief A class to detect a cylinder from a set of points
  */
 class CylinderNode : public rclcpp::Node {
 public:
-
     /**
-    * @brief Construct a new Cylinder Node object
-    */
-    CylinderNode() : Node("cylinder_rotate") {
+     * @brief Construct a new Cylinder Node object
+     */
+    CylinderNode() : Node("cylinder_detect") {
         // Create a subscriber for the LaserScan message
         lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10, std::bind(&CylinderNode::laser_callback, this, std::placeholders::_1));
@@ -25,6 +29,15 @@ public:
             "/odom", 10, std::bind(&CylinderNode::odom_callback, this, std::placeholders::_1));
         // Create a publisher for the Marker message
         marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("cylinder_marker", 10);
+        
+        // Create a client for managing lifecycle nodes
+        lifecycle_client_ = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>(
+            "/lifecycle_manager_navigation/manage_nodes");
+
+            RCLCPP_INFO(this->get_logger(), "Creating action client to navigate to pose");
+
+        navigate_to_pose_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>( 
+            this,   "navigate_to_pose"  );
     }
 
 private:
@@ -32,6 +45,9 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr pose_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
+    rclcpp::Client<nav2_msgs::srv::ManageLifecycleNodes>::SharedPtr lifecycle_client_; // Client for lifecycle service
+    rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate_to_pose_client_;
+    
     // Create the variables
     nav_msgs::msg::Odometry robot_pose_; // To store the robot's pose
     std::vector<geometry_msgs::msg::Point> points_in_segment; // To store the points in the segment
@@ -39,17 +55,17 @@ private:
     int read_counter2 = 0;
 
     /**
-    * @brief Callback function for the Odometry message sent by dead reckoning
-    * @param msg The Odometry message
-    */
+     * @brief Callback function for the Odometry message sent by dead reckoning
+     * @param msg The Odometry message
+     */
     void odom_callback(const std::shared_ptr<nav_msgs::msg::Odometry> msg) {
         robot_pose_ = *msg; // Update the robot's pose
     }
 
     /**
-    * @brief Callback function for the LaserScan message
-    * @param msg The LaserScan message
-    */
+     * @brief Callback function for the LaserScan message
+     * @param msg The LaserScan message
+     */
     void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
         // Constants
         const float diameter = 0.3;  // Cylinder diameter in meters
@@ -75,20 +91,22 @@ private:
                 detected_points.push_back(point);
             }
         }
+
         // Check for cylinder-like structure in detected points
         if (detect_cylinder(detected_points, half_circumference, threshold)) {
             read_counter++;
-            //RCLCPP_INFO(this->get_logger(), "Cylinder Count");
-            // Filter out mistakes/misreads
-            if (read_counter == 15){
+            if (read_counter == 5) {
                 RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
                 publish_marker(points_in_segment);  // Publish marker at the detected points
-                rotate_robot();  // Rotate the robot
+                stop_navigation_service();  // Stop the navigation service
+                // sleep for 5 seconds 
+                rclcpp::sleep_for(std::chrono::seconds(5));
+                send_new_goal();
                 read_counter = 1000;
             }
         } else {
             read_counter2++;
-            if (read_counter2 == 8){
+            if (read_counter2 == 8) {
                 RCLCPP_INFO(this->get_logger(), "No cylinder detected.");
                 delete_marker();  // Delete the marker
                 read_counter2 = 0;
@@ -97,23 +115,71 @@ private:
         }
         rclcpp::sleep_for(std::chrono::milliseconds(30));
     }
-    // Function that rotates the robot 360 degrees when cylinder is detected
-    void rotate_robot(){
-        RCLCPP_INFO(this->get_logger(), "Rotating robot");
-        // Create a publisher for the Twist message
-        auto twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
-        // Create a Twist message
-        auto twist = std::make_shared<geometry_msgs::msg::Twist>();
-        // Set the angular velocity
-        twist->angular.z = 0.5;  // 0.5 rad/s
-        // Set the linear velocity
-        twist->linear.x = 0.0;  // 0 m/s
-        // Publish the Twist message
-        twist_publisher->publish(*twist);
-        rclcpp::sleep_for(std::chrono::milliseconds(1000));
-        RCLCPP_INFO(this->get_logger(), "Stopping robot");
-        twist->angular.z = 0.0;  // Stop rotating
-        twist_publisher->publish(*twist);
+
+    /**
+     * @brief Stops the navigation service
+     */
+    void stop_navigation_service() {
+        auto request = std::make_shared<nav2_msgs::srv::ManageLifecycleNodes::Request>();
+        RCLCPP_INFO(this->get_logger(), "Stopping navigation service...");
+        request->command = 1; // Command to stop the service
+        RCLCPP_INFO(this->get_logger(), "Sending command to stop navigation service...");
+        //Send the command to stop the navigation service
+        auto result_future = lifecycle_client_->async_send_request(request);
+        // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result_future) ==
+        //     rclcpp::FutureReturnCode::SUCCESS) {
+        //     RCLCPP_INFO(this->get_logger(), "Navigation service stopped successfully.");
+        // } else {
+        //     RCLCPP_ERROR(this->get_logger(), "Failed to stop navigation service.");
+        // }
+
+        // Send command to deactivate the service
+        request->command = 2; // Command to deactivate the service
+        result_future = lifecycle_client_->async_send_request(request);
+        // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result_future) ==
+        //     rclcpp::FutureReturnCode::SUCCESS) {
+        //     RCLCPP_INFO(this->get_logger(), "Navigation service deactivated successfully.");
+        // } else {
+        //     RCLCPP_ERROR(this->get_logger(), "Failed to deactivate navigation service.");
+        // }
+    }
+
+    /**
+     * @brief Sends a new goal to the navigation service
+     */
+       // Method to send a new goal
+    void send_new_goal() {
+        // Ensure the client is available
+        if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
+            RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
+            return;
+        }
+        RCLCPP_INFO(this->get_logger(), "Sending new goal to the navigation service...");
+
+        // Create goal message
+        auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
+        goal_msg.pose.header.frame_id = "map";
+        goal_msg.pose.pose.position.x = 3.0;
+        goal_msg.pose.pose.position.y = 0.0;
+        goal_msg.pose.pose.position.z = 0.0;
+        goal_msg.pose.pose.orientation.x = 0.0;
+        goal_msg.pose.pose.orientation.y = 0.0;
+        goal_msg.pose.pose.orientation.z = 0.0;
+        goal_msg.pose.pose.orientation.w = 1.0;
+
+        // Send the goal
+        auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+
+        // // Handle the result
+        // end_goal_future.then(
+        //     [this](rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle) {
+        //         if (!goal_handle) {
+        //             RCLCPP_ERROR(this->get_logger(), "Goal was rejected!");
+        //         } else {
+        //             RCLCPP_INFO(this->get_logger(), "Goal accepted!");
+        //         }
+        //     }
+        // );
     }
 
     /**
@@ -166,6 +232,7 @@ private:
         }
         return false; // No cylinder detected
     }
+
 
     /**
     * @brief Publishes a marker at the centroid of the detected points
@@ -254,16 +321,11 @@ private:
     marker_publisher_->publish(marker);
     }
 
+    
+
 };
 
-/**
-    * @brief Main function to run the node
-    * @param argc Number of arguments
-    * @param argv The arguments
-    * @return int The exit status
- */
-
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<CylinderNode>());
     rclcpp::shutdown();
