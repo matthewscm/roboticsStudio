@@ -53,6 +53,7 @@ private:
     std::vector<geometry_msgs::msg::Point> points_in_segment; // To store the points in the segment
     int read_counter = 0;
     int read_counter2 = 0;
+    bool detected = false;
 
     /**
      * @brief Callback function for the Odometry message sent by dead reckoning
@@ -72,13 +73,13 @@ private:
         const float radius = diameter / 2.0; // Half diameter
         const float circumference = M_PI * diameter; // Circumference of the cylinder
         const float half_circumference = circumference / 2.0; // Half circumference
-        const float threshold = 0.1; // Tolerance for detection (5 cm)
+        const float threshold = 0.1; 
         std::vector<geometry_msgs::msg::Point> detected_points;
 
         // Process the Lidar data to find points that could form a cylinder
         for (size_t i = 0; i < msg->ranges.size(); ++i) {
             // Check if the scan value is valid
-            if (msg->ranges[i] < msg->range_max && msg->ranges[i] > msg->range_min) {
+            if (msg->ranges[i] < 2.5 && msg->ranges[i] > msg->range_min) {
                 // Convert polar coordinates to Cartesian
                 float angle = msg->angle_min + i * msg->angle_increment;
                 float x = msg->ranges[i] * std::cos(angle);
@@ -95,7 +96,7 @@ private:
         // Check for cylinder-like structure in detected points
         if (detect_cylinder(detected_points, half_circumference, threshold)) {
             read_counter++;
-            if (read_counter == 5) {
+            if (read_counter == 15 && !detected) {
                 RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
                 publish_marker(points_in_segment);  // Publish marker at the detected points
                 stop_navigation_service();  // Stop the navigation service
@@ -103,6 +104,7 @@ private:
                 rclcpp::sleep_for(std::chrono::seconds(5));
                 send_new_goal();
                 read_counter = 1000;
+                detected = true;
             }
         } else {
             read_counter2++;
@@ -126,22 +128,12 @@ private:
         RCLCPP_INFO(this->get_logger(), "Sending command to stop navigation service...");
         //Send the command to stop the navigation service
         auto result_future = lifecycle_client_->async_send_request(request);
-        // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result_future) ==
-        //     rclcpp::FutureReturnCode::SUCCESS) {
-        //     RCLCPP_INFO(this->get_logger(), "Navigation service stopped successfully.");
-        // } else {
-        //     RCLCPP_ERROR(this->get_logger(), "Failed to stop navigation service.");
-        // }
+
 
         // Send command to deactivate the service
         request->command = 2; // Command to deactivate the service
         result_future = lifecycle_client_->async_send_request(request);
-        // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result_future) ==
-        //     rclcpp::FutureReturnCode::SUCCESS) {
-        //     RCLCPP_INFO(this->get_logger(), "Navigation service deactivated successfully.");
-        // } else {
-        //     RCLCPP_ERROR(this->get_logger(), "Failed to deactivate navigation service.");
-        // }
+
     }
 
     /**
@@ -159,7 +151,7 @@ private:
         // Create goal message
         auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
         goal_msg.pose.header.frame_id = "map";
-        goal_msg.pose.pose.position.x = 3.0;
+        goal_msg.pose.pose.position.x = -3.0;
         goal_msg.pose.pose.position.y = 0.0;
         goal_msg.pose.pose.position.z = 0.0;
         goal_msg.pose.pose.orientation.x = 0.0;
@@ -199,36 +191,36 @@ private:
         bool isInSegment = false;
 
         for (size_t i = 1; i < points.size(); ++i) {
-            const auto& point = points[i];
-            double dx = point.x - previous_point.x;
-            double dy = point.y - previous_point.y;
-            double distance_sq = dx * dx + dy * dy; // Use squared distance to avoid sqrt
+                const auto& point = points[i];
+                double dx = point.x - previous_point.x;
+                double dy = point.y - previous_point.y;
+                double distance_sq = dx * dx + dy * dy; // Use squared distance to avoid sqrt
 
-            // If readings are close together, assume they are from the same object
-            if (distance_sq < 0.1) { 
-                if (!isInSegment) {
-                    isInSegment = true;
-                    // Clear the points in the segment
-                    total_distance = 0.0;
-                }
-                total_distance += std::sqrt(distance_sq); // Sum distance of the segment
-                points_in_segment.push_back(point); // Store the point
-            } else {
-                if (isInSegment) {
-                    // Check if the segment is a cylinder
-                    if (total_distance < diameter + (threshold) && total_distance > diameter - (threshold * 2) ){
-                        points_in_segment.push_back(point);
-                        return true; // Found a cylinder
-                    } else {
-                         // Clear the points if not a cylinder
-                        points_in_segment.clear();
+                // If readings are close together, assume they are from the same object
+                if (distance_sq < 0.2) { 
+                    if (!isInSegment) {
+                        isInSegment = true;
+                        // Clear the points in the segment
                         total_distance = 0.0;
                     }
+                    total_distance += std::sqrt(distance_sq); // Sum distance of the segment
+                    points_in_segment.push_back(point); // Store the point
+                } else {
+                    if (isInSegment) {
+                        // Check if the segment is a cylinder
+                        if (total_distance < diameter + (threshold) && total_distance > diameter - (threshold * 2) ){
+                            points_in_segment.push_back(point);
+                            return true; // Found a cylinder
+                        } else {
+                            // Clear the points if not a cylinder
+                            points_in_segment.clear();
+                            total_distance = 0.0;
+                        }
+                    }
+                    // Reset the segment
+                    isInSegment = false;
                 }
-                // Reset the segment
-                isInSegment = false;
-            }
-            previous_point = point; // Update previous_point unconditionally
+                previous_point = point; // Update previous_point unconditionally
         }
         return false; // No cylinder detected
     }
