@@ -38,6 +38,8 @@ public:
 
         navigate_to_pose_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>( 
             this,   "navigate_to_pose"  );
+
+        send_goal();
     }
 
 private:
@@ -54,6 +56,8 @@ private:
     int read_counter = 0;
     int read_counter2 = 0;
     bool detected = false;
+    float map_x= 0.0;
+    float map_y = 0.0;
 
     /**
      * @brief Callback function for the Odometry message sent by dead reckoning
@@ -79,7 +83,7 @@ private:
         // Process the Lidar data to find points that could form a cylinder
         for (size_t i = 0; i < msg->ranges.size(); ++i) {
             // Check if the scan value is valid
-            if (msg->ranges[i] < 2.5 && msg->ranges[i] > msg->range_min) {
+            if (msg->ranges[i] < 2.9 && msg->ranges[i] > msg->range_min) {
                 // Convert polar coordinates to Cartesian
                 float angle = msg->angle_min + i * msg->angle_increment;
                 float x = msg->ranges[i] * std::cos(angle);
@@ -96,13 +100,14 @@ private:
         // Check for cylinder-like structure in detected points
         if (detect_cylinder(detected_points, half_circumference, threshold)) {
             read_counter++;
-            if (read_counter == 15 && !detected) {
+            if (read_counter == 10 && !detected) {
                 RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
                 publish_marker(points_in_segment);  // Publish marker at the detected points
                 stop_navigation_service();  // Stop the navigation service
                 // sleep for 5 seconds 
                 rclcpp::sleep_for(std::chrono::seconds(5));
-                send_new_goal();
+                send_cylinder_goal();  // Send goals to navigate around the cylinder
+                send_goal();
                 read_counter = 1000;
                 detected = true;
             }
@@ -140,7 +145,7 @@ private:
      * @brief Sends a new goal to the navigation service
      */
        // Method to send a new goal
-    void send_new_goal() {
+    void send_goal() {
         // Ensure the client is available
         if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
             RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
@@ -161,18 +166,60 @@ private:
 
         // Send the goal
         auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
-
-        // // Handle the result
-        // end_goal_future.then(
-        //     [this](rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle) {
-        //         if (!goal_handle) {
-        //             RCLCPP_ERROR(this->get_logger(), "Goal was rejected!");
-        //         } else {
-        //             RCLCPP_INFO(this->get_logger(), "Goal accepted!");
-        //         }
-        //     }
-        // );
     }
+
+    void send_cylinder_goal() {
+        // Ensure the client is available
+        if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
+            RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
+            return;
+        }
+        RCLCPP_INFO(this->get_logger(), "Sending new goals to navigate around the cylinder...");
+
+        // Cylinder radius (0.3) + additional distance (0.5) = 0.8 radius from the center
+        double radius = 0.8;
+        double robot_start_x = robot_pose_.pose.pose.position.x;
+        double robot_start_y = robot_pose_.pose.pose.position.y;
+
+        // Create an array of 4 goal positions (90-degree intervals around the cylinder)
+        std::vector<std::pair<double, double>> goals = {
+            {map_x + radius, map_y},                // Point 1 (to the right of the cylinder)
+            {map_x, map_y + radius},                // Point 2 (above the cylinder)
+            {map_x - radius, map_y},                // Point 3 (to the left of the cylinder)
+            {map_x, map_y - radius}                 // Point 4 (below the cylinder)
+        };
+
+        // Append the robot's starting position as the last goal
+        goals.push_back({robot_start_x, robot_start_y});       // Return to the starting position
+
+        // Loop through each goal and send the navigation command
+        for (auto& goal_pos : goals) {
+            auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
+            goal_msg.pose.header.frame_id = "map";
+            goal_msg.pose.pose.position.x = goal_pos.first;
+            goal_msg.pose.pose.position.y = goal_pos.second;
+            goal_msg.pose.pose.position.z = 0.0;
+            goal_msg.pose.pose.orientation.x = 0.0;
+            goal_msg.pose.pose.orientation.y = 0.0;
+            goal_msg.pose.pose.orientation.z = 0.0;
+            goal_msg.pose.pose.orientation.w = 1.0;
+
+            // Send the goal and wait for the result
+            auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+            // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), end_goal_future) !=
+            //     rclcpp::executor::FutureReturnCode::SUCCESS) {
+            //     RCLCPP_ERROR(this->get_logger(), "Failed to reach the goal");
+            //     return;
+            // }
+            //sleep for 5 seconds
+            rclcpp::sleep_for(std::chrono::seconds(5));
+
+            RCLCPP_INFO(this->get_logger(), "Reached goal at x: %f, y: %f", goal_pos.first, goal_pos.second);
+        }
+
+        RCLCPP_INFO(this->get_logger(), "All goals completed");
+    }
+
 
     /**
     * @brief Detects a cylinder from a set of points
@@ -262,8 +309,8 @@ private:
 
     // Transform the centroid to the robot frame
     // Rotation transformation
-    float map_x = x_position + (centroid_x * cos(yaw) - centroid_y * sin(yaw));
-    float map_y = y_position + (centroid_x * sin(yaw) + centroid_y * cos(yaw));
+    map_x = x_position + (centroid_x * cos(yaw) - centroid_y * sin(yaw));
+    map_y = y_position + (centroid_x * sin(yaw) + centroid_y * cos(yaw));
 
         // Create a marker
         visualization_msgs::msg::Marker marker;
