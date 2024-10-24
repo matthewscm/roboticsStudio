@@ -60,13 +60,21 @@ private:
     bool detected = false;
     float map_x= 0.0;
     float map_y = 0.0;
+    nav_msgs::msg::Odometry odom;
 
     /**
-     * @brief Callback function for the Odometry message sent by dead reckoning
+     * @brief Callback function for the Odometry message 
      * @param msg The Odometry message
      */
     void odom_callback(const std::shared_ptr<nav_msgs::msg::Odometry> msg) {
         robot_pose_ = *msg; // Update the robot's pose
+        RCLCPP_INFO(this->get_logger(), "Robot's position: x: %f, y: %f", robot_pose_.pose.pose.position.x, robot_pose_.pose.pose.position.y);
+    }
+
+    // get odom
+    void get_odom() {
+        odom = robot_pose_;
+        //RCLCPP_INFO(this->get_logger(), "Robot's position: x: %f, y: %f", odom.pose.pose.position.x, odom.pose.pose.position.y);
     }
 
        /**
@@ -196,7 +204,7 @@ private:
     goal_msg.pose.pose.orientation.z = 0.0;
     goal_msg.pose.pose.orientation.w = 1.0;
     // Send the goal with options
-    //auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+    auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
     
 }
 
@@ -223,30 +231,40 @@ private:
 
         // Append the robot's starting position as the last goal
         goals.push_back({robot_start_x, robot_start_y});       // Return to the starting position
-
+        int goal_number = 0;
         // Loop through each goal and send the navigation command
-        for (auto& goal_pos : goals) {
-            auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
-            goal_msg.pose.header.frame_id = "map";
-            goal_msg.pose.pose.position.x = goal_pos.first;
-            goal_msg.pose.pose.position.y = goal_pos.second;
-            goal_msg.pose.pose.position.z = 0.0;
-            goal_msg.pose.pose.orientation.x = 0.0;
-            goal_msg.pose.pose.orientation.y = 0.0;
-            goal_msg.pose.pose.orientation.z = 0.0;
-            goal_msg.pose.pose.orientation.w = 1.0;
+        while (goal_number < 5) {
+            // spin to update odom
+            //rclcpp::spin_some(this->get_node_base_interface());
 
-            // Send the goal and wait for the result
-            auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
-            // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), end_goal_future) !=
-            //     rclcpp::executor::FutureReturnCode::SUCCESS) {
-            //     RCLCPP_ERROR(this->get_logger(), "Failed to reach the goal");
-            //     return;
-            // }
-            //sleep for 5 seconds
-            rclcpp::sleep_for(std::chrono::seconds(5));
+            get_odom();
+            // calcualte distance between robot and goal
+            double distance = std::sqrt(std::pow(goals[goal_number].first - odom.pose.pose.position.x, 2) + std::pow(goals[goal_number].second - odom.pose.pose.position.y, 2));
+            RCLCPP_INFO(this->get_logger(), "Distance to goal: %f", distance);
+            if (goal_number == 0 || distance < 0.5) {
+                goal_number++;
+                auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
+                goal_msg.pose.header.frame_id = "map";
+                goal_msg.pose.pose.position.x = goals[goal_number].first;
+                goal_msg.pose.pose.position.y = goals[goal_number].second;
+                goal_msg.pose.pose.position.z = 0.0;
+                goal_msg.pose.pose.orientation.x = 0.0;
+                goal_msg.pose.pose.orientation.y = 0.0;
+                goal_msg.pose.pose.orientation.z = 0.0;
+                goal_msg.pose.pose.orientation.w = 1.0;
 
-            //RCLCPP_INFO(this->get_logger(), "Reached goal at x: %f, y: %f", goal_pos.first, goal_pos.second);
+                // Send the goal and wait for the result
+                auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+                // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), end_goal_future) !=
+                //     rclcpp::executor::FutureReturnCode::SUCCESS) {
+                //     RCLCPP_ERROR(this->get_logger(), "Failed to reach the goal");
+                //     return;
+                // }
+                //sleep for 5 seconds
+                //rclcpp::sleep_for(std::chrono::seconds(5));
+
+                //RCLCPP_INFO(this->get_logger(), "Reached goal at x: %f, y: %f", goal_pos.first, goal_pos.second);
+            }
         }
 
         //RCLCPP_INFO(this->get_logger(), "All goals completed");
