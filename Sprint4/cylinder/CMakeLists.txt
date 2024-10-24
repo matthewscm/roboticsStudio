@@ -19,7 +19,11 @@ find_package(rclcpp_action REQUIRED)
 include_directories(include)
 
 # Create executable
-add_executable(cylinder_rotate src/cylinder_rotate.cpp)
+add_executable(cylinder_rotate src/cylinder_rotate.cpp )
+target_link_libraries(cylinder_rotate rclcpp::rclcpp)
+
+#add_executable(odometry_node src/odometry_node.cpp)
+#target_link_libraries(odometry_node rclcpp::rclcpp)
 
 # Link libraries
 ament_target_dependencies(cylinder_rotate

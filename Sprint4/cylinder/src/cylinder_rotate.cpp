@@ -10,6 +10,7 @@
 #include <nav2_msgs/srv/manage_lifecycle_nodes.hpp>
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "odometry_node.h" 
 
 
 /**
@@ -21,6 +22,7 @@ public:
      * @brief Construct a new Cylinder Node object
      */
     CylinderNode() : Node("cylinder_detect") {
+        //odometry_node_ = std::make_shared<OdometryNode>(); 
         // Create a subscriber for the LaserScan message
         lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10, std::bind(&CylinderNode::laser_callback, this, std::placeholders::_1));
@@ -38,8 +40,8 @@ public:
 
         navigate_to_pose_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>( 
             this,   "navigate_to_pose"  );
-
-
+            
+       
         send_goal();
     }
 
@@ -60,7 +62,11 @@ private:
     bool detected = false;
     float map_x= 0.0;
     float map_y = 0.0;
-    nav_msgs::msg::Odometry odom;
+    bool all_reached = false;
+    int goal_number = 0;
+    double robot_start_x = 0.0;
+    double robot_start_y = 0.0;
+    //nav_msgs::msg::Odometry odom;
 
     /**
      * @brief Callback function for the Odometry message 
@@ -68,42 +74,9 @@ private:
      */
     void odom_callback(const std::shared_ptr<nav_msgs::msg::Odometry> msg) {
         robot_pose_ = *msg; // Update the robot's pose
-        RCLCPP_INFO(this->get_logger(), "Robot's position: x: %f, y: %f", robot_pose_.pose.pose.position.x, robot_pose_.pose.pose.position.y);
+        //RCLCPP_INFO(this->get_logger(), "Robot's position: x: %f, y: %f", robot_pose_.pose.pose.position.x, robot_pose_.pose.pose.position.y);
     }
 
-    // get odom
-    void get_odom() {
-        odom = robot_pose_;
-        //RCLCPP_INFO(this->get_logger(), "Robot's position: x: %f, y: %f", odom.pose.pose.position.x, odom.pose.pose.position.y);
-    }
-
-       /**
-     * @brief Handle feedback from the action server
-     */
-    void feedback_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle, const std::shared_ptr<const nav2_msgs::action::NavigateToPose::Feedback> feedback) {
-        RCLCPP_INFO(this->get_logger(), "Current position: x: %f, y: %f", feedback->current_pose.pose.position.x, feedback->current_pose.pose.position.y);
-
-    }
-
-    /**
-     * @brief Handle result of the action
-     */
-    void result_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result) {
-        switch (result.code) {
-            case rclcpp_action::ResultCode::SUCCEEDED:
-                RCLCPP_INFO(this->get_logger(), "Goal succeeded!");
-                break;
-            case rclcpp_action::ResultCode::ABORTED:
-                RCLCPP_INFO(this->get_logger(), "Goal was aborted.");
-                break;
-            case rclcpp_action::ResultCode::CANCELED:
-                RCLCPP_INFO(this->get_logger(), "Goal was canceled.");
-                break;
-            default:
-                RCLCPP_ERROR(this->get_logger(), "Unknown result code.");
-                break;
-        }
-    }
 
 
 
@@ -123,7 +96,7 @@ private:
         // Process the Lidar data to find points that could form a cylinder
         for (size_t i = 0; i < msg->ranges.size(); ++i) {
             // Check if the scan value is valid
-            if (msg->ranges[i] < 2.9 && msg->ranges[i] > msg->range_min) {
+            if (msg->ranges[i] < 2.6 && msg->ranges[i] > msg->range_min) {
                 // Convert polar coordinates to Cartesian
                 float angle = msg->angle_min + i * msg->angle_increment;
                 float x = msg->ranges[i] * std::cos(angle);
@@ -140,22 +113,32 @@ private:
         // Check for cylinder-like structure in detected points
         if (detect_cylinder(detected_points, half_circumference, threshold)) {
             read_counter++;
-            if (read_counter == 10 && !detected) {
+            if (read_counter == 6 && !detected) {
                 RCLCPP_INFO(this->get_logger(), "Cylinder detected!");
                 publish_marker(points_in_segment);  // Publish marker at the detected points
                 stop_navigation_service();  // Stop the navigation service
                 // sleep for 5 seconds 
                 rclcpp::sleep_for(std::chrono::seconds(5));
-                send_cylinder_goal();  // Send goals to navigate around the cylinder
-                send_goal();
+                // send_cylinder_goal();  // Send goals to navigate around the cylinder
+                // send_goal();
                 read_counter = 1000;
                 detected = true;
+                robot_start_x = robot_pose_.pose.pose.position.x;
+                robot_start_y = robot_pose_.pose.pose.position.y;
+            }
+            else if (detected) {
+                //double distance = std::sqrt(std::pow(map_x - robot_pose_.pose.pose.position.x, 2) + std::pow(map_y - robot_pose_.pose.pose.position.y, 2));
+                send_cylinder_goal();
+                if (all_reached) {
+                    RCLCPP_INFO(this->get_logger(), "All goals reached.");
+                    send_goal();
+                }
             }
         } else {
             read_counter2++;
-            if (read_counter2 == 8) {
+            if (read_counter2 == 2) {
                 RCLCPP_INFO(this->get_logger(), "No cylinder detected.");
-                delete_marker();  // Delete the marker
+                //delete_marker();  // Delete the marker
                 read_counter2 = 0;
                 read_counter = 0;
             }
@@ -186,27 +169,27 @@ private:
      */
 
     void send_goal() {
-    // Ensure the client is available
-    if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
-        RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
-        return;
-    }
-    RCLCPP_INFO(this->get_logger(), "Sending new goal to the navigation service...");
+        // Ensure the client is available
+        if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
+            RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
+            return;
+        }
+       // RCLCPP_INFO(this->get_logger(), "Sending new goal to the navigation service...");
 
-    // Create goal message
-    auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
-    goal_msg.pose.header.frame_id = "map";
-    goal_msg.pose.pose.position.x = -3.0;
-    goal_msg.pose.pose.position.y = 0.0;
-    goal_msg.pose.pose.position.z = 0.0;
-    goal_msg.pose.pose.orientation.x = 0.0;
-    goal_msg.pose.pose.orientation.y = 0.0;
-    goal_msg.pose.pose.orientation.z = 0.0;
-    goal_msg.pose.pose.orientation.w = 1.0;
-    // Send the goal with options
-    auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+        // Create goal message
+        auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
+        goal_msg.pose.header.frame_id = "map";
+        goal_msg.pose.pose.position.x = -4.0;
+        goal_msg.pose.pose.position.y = 1.0;
+        goal_msg.pose.pose.position.z = 0.0;
+        goal_msg.pose.pose.orientation.x = 0.0;
+        goal_msg.pose.pose.orientation.y = 0.0;
+        goal_msg.pose.pose.orientation.z = 0.0;
+        goal_msg.pose.pose.orientation.w = 1.0;
+        // Send the goal with options
+        auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
     
-}
+    }
 
     void send_cylinder_goal() {
         // Ensure the client is available
@@ -214,33 +197,23 @@ private:
             RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
             return;
         }
-        RCLCPP_INFO(this->get_logger(), "Sending new goals to navigate around the cylinder...");
+       // RCLCPP_INFO(this->get_logger(), "Sending new goals to navigate around the cylinder...");
 
         // Cylinder radius (0.3) + additional distance (0.5) = 0.8 radius from the center
         double radius = 0.8;
-        double robot_start_x = robot_pose_.pose.pose.position.x;
-        double robot_start_y = robot_pose_.pose.pose.position.y;
 
         // Create an array of 4 goal positions (90-degree intervals around the cylinder)
         std::vector<std::pair<double, double>> goals = {
-            {map_x + radius, map_y},                // Point 1 (to the right of the cylinder)
+            {map_x, map_y - radius},                // Point 0 (below the cylinder)
+            {map_x - radius, map_y},                // Point 1 (to the right of the cylinder)
             {map_x, map_y + radius},                // Point 2 (above the cylinder)
-            {map_x - radius, map_y},                // Point 3 (to the left of the cylinder)
+            {map_x + radius, map_y},                // Point 3 (to the left of the cylinder)
             {map_x, map_y - radius}                 // Point 4 (below the cylinder)
         };
-
+        double distance = std::sqrt(std::pow(goals[goal_number].first - robot_pose_.pose.pose.position.x, 2) + std::pow(goals[goal_number].second -  robot_pose_.pose.pose.position.y, 2));
         // Append the robot's starting position as the last goal
         goals.push_back({robot_start_x, robot_start_y});       // Return to the starting position
-        int goal_number = 0;
         // Loop through each goal and send the navigation command
-        while (goal_number < 5) {
-            // spin to update odom
-            //rclcpp::spin_some(this->get_node_base_interface());
-
-            get_odom();
-            // calcualte distance between robot and goal
-            double distance = std::sqrt(std::pow(goals[goal_number].first - odom.pose.pose.position.x, 2) + std::pow(goals[goal_number].second - odom.pose.pose.position.y, 2));
-            RCLCPP_INFO(this->get_logger(), "Distance to goal: %f", distance);
             if (goal_number == 0 || distance < 0.5) {
                 goal_number++;
                 auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
@@ -255,19 +228,12 @@ private:
 
                 // Send the goal and wait for the result
                 auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
-                // if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), end_goal_future) !=
-                //     rclcpp::executor::FutureReturnCode::SUCCESS) {
-                //     RCLCPP_ERROR(this->get_logger(), "Failed to reach the goal");
-                //     return;
-                // }
-                //sleep for 5 seconds
-                //rclcpp::sleep_for(std::chrono::seconds(5));
-
-                //RCLCPP_INFO(this->get_logger(), "Reached goal at x: %f, y: %f", goal_pos.first, goal_pos.second);
+                RCLCPP_INFO(this->get_logger(), "Sending goal %d to the navigation service...", goal_number);
             }
-        }
-
-        //RCLCPP_INFO(this->get_logger(), "All goals completed");
+            if (goal_number == 5) {
+                all_reached = true;
+            }
+        return;
     }
 
 
@@ -305,7 +271,7 @@ private:
                 } else {
                     if (isInSegment) {
                         // Check if the segment is a cylinder
-                        if (total_distance < diameter + (threshold) && total_distance > diameter - (threshold * 2) ){
+                        if (total_distance < diameter + (threshold/2) && total_distance > diameter - (threshold * 1.5) ){
                             points_in_segment.push_back(point);
                             return true; // Found a cylinder
                         } else {
