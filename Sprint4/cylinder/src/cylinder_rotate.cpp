@@ -96,7 +96,7 @@ private:
         // Process the Lidar data to find points that could form a cylinder
         for (size_t i = 0; i < msg->ranges.size(); ++i) {
             // Check if the scan value is valid
-            if (msg->ranges[i] < 2.6 && msg->ranges[i] > msg->range_min) {
+            if (msg->ranges[i] < 2.5 && msg->ranges[i] > msg->range_min) {
                 // Convert polar coordinates to Cartesian
                 float angle = msg->angle_min + i * msg->angle_increment;
                 float x = msg->ranges[i] * std::cos(angle);
