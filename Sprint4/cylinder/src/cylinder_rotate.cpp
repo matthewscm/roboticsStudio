@@ -39,6 +39,7 @@ public:
         navigate_to_pose_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>( 
             this,   "navigate_to_pose"  );
 
+
         send_goal();
     }
 
@@ -49,6 +50,7 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
     rclcpp::Client<nav2_msgs::srv::ManageLifecycleNodes>::SharedPtr lifecycle_client_; // Client for lifecycle service
     rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate_to_pose_client_;
+
     
     // Create the variables
     nav_msgs::msg::Odometry robot_pose_; // To store the robot's pose
@@ -66,6 +68,36 @@ private:
     void odom_callback(const std::shared_ptr<nav_msgs::msg::Odometry> msg) {
         robot_pose_ = *msg; // Update the robot's pose
     }
+
+       /**
+     * @brief Handle feedback from the action server
+     */
+    void feedback_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle, const std::shared_ptr<const nav2_msgs::action::NavigateToPose::Feedback> feedback) {
+        RCLCPP_INFO(this->get_logger(), "Current position: x: %f, y: %f", feedback->current_pose.pose.position.x, feedback->current_pose.pose.position.y);
+
+    }
+
+    /**
+     * @brief Handle result of the action
+     */
+    void result_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result) {
+        switch (result.code) {
+            case rclcpp_action::ResultCode::SUCCEEDED:
+                RCLCPP_INFO(this->get_logger(), "Goal succeeded!");
+                break;
+            case rclcpp_action::ResultCode::ABORTED:
+                RCLCPP_INFO(this->get_logger(), "Goal was aborted.");
+                break;
+            case rclcpp_action::ResultCode::CANCELED:
+                RCLCPP_INFO(this->get_logger(), "Goal was canceled.");
+                break;
+            default:
+                RCLCPP_ERROR(this->get_logger(), "Unknown result code.");
+                break;
+        }
+    }
+
+
 
     /**
      * @brief Callback function for the LaserScan message
@@ -144,29 +176,29 @@ private:
     /**
      * @brief Sends a new goal to the navigation service
      */
-       // Method to send a new goal
+
     void send_goal() {
-        // Ensure the client is available
-        if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
-            RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
-            return;
-        }
-        RCLCPP_INFO(this->get_logger(), "Sending new goal to the navigation service...");
-
-        // Create goal message
-        auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
-        goal_msg.pose.header.frame_id = "map";
-        goal_msg.pose.pose.position.x = -3.0;
-        goal_msg.pose.pose.position.y = 0.0;
-        goal_msg.pose.pose.position.z = 0.0;
-        goal_msg.pose.pose.orientation.x = 0.0;
-        goal_msg.pose.pose.orientation.y = 0.0;
-        goal_msg.pose.pose.orientation.z = 0.0;
-        goal_msg.pose.pose.orientation.w = 1.0;
-
-        // Send the goal
-        auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+    // Ensure the client is available
+    if (!navigate_to_pose_client_->wait_for_action_server(std::chrono::seconds(5))) {
+        RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
+        return;
     }
+    RCLCPP_INFO(this->get_logger(), "Sending new goal to the navigation service...");
+
+    // Create goal message
+    auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
+    goal_msg.pose.header.frame_id = "map";
+    goal_msg.pose.pose.position.x = -3.0;
+    goal_msg.pose.pose.position.y = 0.0;
+    goal_msg.pose.pose.position.z = 0.0;
+    goal_msg.pose.pose.orientation.x = 0.0;
+    goal_msg.pose.pose.orientation.y = 0.0;
+    goal_msg.pose.pose.orientation.z = 0.0;
+    goal_msg.pose.pose.orientation.w = 1.0;
+    // Send the goal with options
+    //auto end_goal_future = navigate_to_pose_client_->async_send_goal(goal_msg);
+    
+}
 
     void send_cylinder_goal() {
         // Ensure the client is available
@@ -214,10 +246,10 @@ private:
             //sleep for 5 seconds
             rclcpp::sleep_for(std::chrono::seconds(5));
 
-            RCLCPP_INFO(this->get_logger(), "Reached goal at x: %f, y: %f", goal_pos.first, goal_pos.second);
+            //RCLCPP_INFO(this->get_logger(), "Reached goal at x: %f, y: %f", goal_pos.first, goal_pos.second);
         }
 
-        RCLCPP_INFO(this->get_logger(), "All goals completed");
+        //RCLCPP_INFO(this->get_logger(), "All goals completed");
     }
 
 
