@@ -10,7 +10,6 @@
 #include <nav2_msgs/srv/manage_lifecycle_nodes.hpp>
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "odometry_node.h" 
 
 
 /**
@@ -74,11 +73,7 @@ private:
      */
     void odom_callback(const std::shared_ptr<nav_msgs::msg::Odometry> msg) {
         robot_pose_ = *msg; // Update the robot's pose
-        //RCLCPP_INFO(this->get_logger(), "Robot's position: x: %f, y: %f", robot_pose_.pose.pose.position.x, robot_pose_.pose.pose.position.y);
     }
-
-
-
 
     /**
      * @brief Callback function for the LaserScan message
@@ -127,7 +122,6 @@ private:
                 robot_start_y = robot_pose_.pose.pose.position.y;
             }
             else if (detected) {
-                //double distance = std::sqrt(std::pow(map_x - robot_pose_.pose.pose.position.x, 2) + std::pow(map_y - robot_pose_.pose.pose.position.y, 2));
                 send_cylinder_goal();
                 if (all_reached) {
                     RCLCPP_INFO(this->get_logger(), "All goals reached.");
